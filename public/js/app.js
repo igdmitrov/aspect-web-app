@@ -227,7 +227,7 @@ class SettlementApp {
         document.getElementById('invoiceCount').textContent = invoices.length;
         
         if (invoices.length === 0) {
-            tbody.innerHTML = '<tr class="loading-row"><td colspan="8">No invoices found</td></tr>';
+            tbody.innerHTML = '<tr class="loading-row"><td colspan="14">No invoices found</td></tr>';
             return;
         }
 
@@ -243,12 +243,18 @@ class SettlementApp {
                     <td class="col-check">
                         <input type="radio" name="invoice-select" class="invoice-radio" data-id="${inv.invoiceId}" ${isSelected ? 'checked' : ''}>
                     </td>
-                    <td class="col-ref">${inv.reference || inv.invoiceName || '-'}</td>
+                    <td class="col-id">${inv.invoiceName || '-'}</td>
+                    <td class="col-ref">${inv.reference || '-'}</td>
                     <td class="col-cpty">${inv.counterpartyName || '-'}</td>
+                    <td class="col-strategy">${inv.strategyName || '-'}</td>
+                    <td class="col-tanker">${inv.tankerName || '-'}</td>
+                    <td class="col-item">${inv.itemType || '-'}</td>
                     <td class="col-amount">${this.formatNumber(inv.amount)}</td>
                     <td class="col-balance ${balanceClass}">${this.formatNumber(balance)}</td>
                     <td class="col-curr">${inv.invoiceCurrency || '-'}</td>
+                    <td class="col-date">${this.formatDate(inv.issueDate)}</td>
                     <td class="col-date">${this.formatDate(inv.dueDate)}</td>
+                    <td class="col-bank">${inv.bankName || '-'}</td>
                     <td class="col-dir ${dirClass}">${direction}</td>
                 </tr>
             `;
@@ -275,7 +281,7 @@ class SettlementApp {
         document.getElementById('paymentCount').textContent = payments.length;
         
         if (payments.length === 0) {
-            tbody.innerHTML = '<tr class="loading-row"><td colspan="8">No payments found</td></tr>';
+            tbody.innerHTML = '<tr class="loading-row"><td colspan="11">No payments found</td></tr>';
             return;
         }
 
@@ -285,6 +291,7 @@ class SettlementApp {
             const dirClass = pmt.isIncoming ? 'direction-in' : 'direction-out';
             const unallocated = pmt.unallocatedAmount !== undefined ? pmt.unallocatedAmount : pmt.amount;
             const unallocClass = unallocated >= 0 ? 'amount-positive' : 'amount-negative';
+            const exchRate = pmt.exchangeRate ? this.formatNumber(pmt.exchangeRate) : '-';
             
             return `
                 <tr class="${isSelected ? 'selected' : ''}" data-id="${pmt.paymentId}">
@@ -296,7 +303,10 @@ class SettlementApp {
                     <td class="col-amount">${this.formatNumber(pmt.amount)}</td>
                     <td class="col-balance ${unallocClass}">${this.formatNumber(unallocated)}</td>
                     <td class="col-curr">${pmt.currency || '-'}</td>
+                    <td class="col-rate">${exchRate}</td>
                     <td class="col-date">${this.formatDate(pmt.valueDate)}</td>
+                    <td class="col-account">${pmt.bankAccountName || pmt.bankAccountNumber || '-'}</td>
+                    <td class="col-strategy">${pmt.strategyName || '-'}</td>
                     <td class="col-dir ${dirClass}">${direction}</td>
                 </tr>
             `;
