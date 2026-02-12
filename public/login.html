@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Aspect Web App</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <h1>Aspect Web App</h1>
+                <p>Invoice & Payment Settlement</p>
+            </div>
+            
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username" 
+                        required 
+                        autocomplete="username"
+                        placeholder="Enter your AspectCTRM username"
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        required 
+                        autocomplete="current-password"
+                        placeholder="Enter your password"
+                    >
+                </div>
+                
+                <div id="errorMessage" class="error-message hidden"></div>
+                
+                <button type="submit" class="btn btn-primary btn-login">
+                    <span class="btn-text">Sign In</span>
+                    <span class="btn-loader hidden">
+                        <svg class="spinner" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="31.4" stroke-linecap="round">
+                                <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+                            </circle>
+                        </svg>
+                    </span>
+                </button>
+            </form>
+            
+            <div class="login-footer">
+                <p>Connecting to AspectCTRM</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('errorMessage');
+            const btn = document.querySelector('.btn-login');
+            const btnText = btn.querySelector('.btn-text');
+            const btnLoader = btn.querySelector('.btn-loader');
+            
+            // Reset error
+            errorDiv.classList.add('hidden');
+            errorDiv.textContent = '';
+            
+            // Show loading
+            btn.disabled = true;
+            btnText.textContent = 'Signing in...';
+            btnLoader.classList.remove('hidden');
+            
+            try {
+                const response = await fetch('/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    window.location.href = '/';
+                } else {
+                    errorDiv.textContent = data.error || 'Login failed';
+                    errorDiv.classList.remove('hidden');
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Connection error. Please try again.';
+                errorDiv.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btnText.textContent = 'Sign In';
+                btnLoader.classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
