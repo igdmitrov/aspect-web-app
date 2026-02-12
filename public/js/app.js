@@ -220,6 +220,12 @@ class SettlementApp {
 
         this.renderInvoices(filteredInvoices);
         this.renderPayments(filteredPayments);
+        
+        // Hide/show Counterparty column based on filter selection
+        const hideCounterparty = counterparty !== '';
+        document.querySelectorAll('.col-cpty').forEach(el => {
+            el.style.display = hideCounterparty ? 'none' : '';
+        });
     }
 
     renderInvoices(invoices) {
