@@ -10,15 +10,29 @@ class SettlementApp {
         this.counterparties = [];
         this.currencies = new Set();
         this.counterpartyChoices = null;
+        this.aspectPortalUrl = '';
         
         this.init();
     }
 
     async init() {
+        await this.loadConfig();
         await this.loadCurrentUser();
         this.initChoices();
         this.bindEvents();
         await this.loadData();
+    }
+
+    async loadConfig() {
+        try {
+            const response = await fetch('/api/config');
+            if (response.ok) {
+                const config = await response.json();
+                this.aspectPortalUrl = config.aspectPortalUrl || '';
+            }
+        } catch (error) {
+            console.error('Error loading config:', error);
+        }
     }
 
     initChoices() {
@@ -249,7 +263,7 @@ class SettlementApp {
                     <td class="col-check">
                         <input type="radio" name="invoice-select" class="invoice-radio" data-id="${inv.invoiceId}" ${isSelected ? 'checked' : ''}>
                     </td>
-                    <td class="col-id">${inv.invoiceName || '-'}</td>
+                    <td class="col-id">${this.createAspectLink(inv.invoiceId, inv.invoiceName)}</td>
                     <td class="col-ref">${inv.reference || '-'}</td>
                     <td class="col-cpty">${inv.counterpartyName || '-'}</td>
                     <td class="col-strategy">${inv.strategyName || '-'}</td>
@@ -304,7 +318,7 @@ class SettlementApp {
                     <td class="col-check">
                         <input type="radio" name="payment-select" class="payment-radio" data-id="${pmt.paymentId}" ${isSelected ? 'checked' : ''}>
                     </td>
-                    <td class="col-ref">${pmt.reference || pmt.paymentName || '-'}</td>
+                    <td class="col-ref">${this.createAspectLink(pmt.paymentId, pmt.reference || pmt.paymentName)}</td>
                     <td class="col-cpty">${pmt.counterpartyName || '-'}</td>
                     <td class="col-amount">${this.formatNumber(pmt.amount)}</td>
                     <td class="col-balance ${unallocClass}">${this.formatNumber(unallocated)}</td>
@@ -538,6 +552,13 @@ class SettlementApp {
         } catch {
             return dateStr;
         }
+    }
+
+    createAspectLink(entityId, displayText) {
+        if (!displayText) return '-';
+        if (!this.aspectPortalUrl || !entityId) return displayText;
+        const url = `${this.aspectPortalUrl}/portal/aspect?action=edit&source=aspect&aspect-action=edit&aspect-edit-id=${entityId}`;
+        return `<a href="${url}" target="_blank" class="aspect-link">${displayText}</a>`;
     }
 }
 

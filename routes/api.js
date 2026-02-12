@@ -11,7 +11,14 @@ const requireAuth = (req, res, next) => {
     }
 };
 
-// Apply auth to all API routes
+// Config endpoint (no auth required for base URL)
+router.get('/config', (req, res) => {
+    res.json({
+        aspectPortalUrl: process.env.ASPECT_BASE_URL
+    });
+});
+
+// Apply auth to all API routes below
 router.use(requireAuth);
 
 // Helper function to call AspectCTRM webservice
