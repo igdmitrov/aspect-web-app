@@ -259,6 +259,25 @@ body {
     min-width: 140px;
 }
 
+.date-range {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.date-range input[type="date"] {
+    padding: 4px 6px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 0.7rem;
+    width: 120px;
+}
+
+.date-range span {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
 /* Choices.js custom styling */
 .choices {
     margin-bottom: 0;

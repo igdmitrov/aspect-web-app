@@ -73,6 +73,10 @@ class SettlementApp {
         document.getElementById('counterpartyFilter').addEventListener('change', () => this.applyFilters());
         document.getElementById('currencyFilter').addEventListener('change', () => this.applyFilters());
         document.getElementById('statusFilter').addEventListener('change', () => this.applyFilters());
+        document.getElementById('issueDateFrom').addEventListener('change', () => this.applyFilters());
+        document.getElementById('issueDateTo').addEventListener('change', () => this.applyFilters());
+        document.getElementById('dueDateFrom').addEventListener('change', () => this.applyFilters());
+        document.getElementById('dueDateTo').addEventListener('change', () => this.applyFilters());
         
         // Create Allocation
         document.getElementById('createAllocationBtn').addEventListener('click', () => this.createAllocation());
@@ -202,8 +206,12 @@ class SettlementApp {
         const counterparty = document.getElementById('counterpartyFilter').value;
         const currency = document.getElementById('currencyFilter').value;
         const status = document.getElementById('statusFilter').value;
+        const issueDateFrom = document.getElementById('issueDateFrom').value;
+        const issueDateTo = document.getElementById('issueDateTo').value;
+        const dueDateFrom = document.getElementById('dueDateFrom').value;
+        const dueDateTo = document.getElementById('dueDateTo').value;
 
-        console.log('Applying filters:', { counterparty, currency, status });
+        console.log('Applying filters:', { counterparty, currency, status, issueDateFrom, issueDateTo, dueDateFrom, dueDateTo });
         console.log('Total invoices before filter:', this.invoices?.length || 0);
         console.log('Total payments before filter:', this.payments?.length || 0);
 
@@ -217,6 +225,27 @@ class SettlementApp {
             if (counterparty && inv.counterpartyName !== counterparty) return false;
             if (currency && inv.invoiceCurrency !== currency) return false;
             if (status === 'open' && Math.abs(inv.invoiceBalance || 0) < 0.01) return false;
+            
+            // Issue Date filter
+            if (issueDateFrom && inv.issueDate) {
+                const issueDate = inv.issueDate.split('T')[0];
+                if (issueDate < issueDateFrom) return false;
+            }
+            if (issueDateTo && inv.issueDate) {
+                const issueDate = inv.issueDate.split('T')[0];
+                if (issueDate > issueDateTo) return false;
+            }
+            
+            // Due Date filter
+            if (dueDateFrom && inv.dueDate) {
+                const dueDate = inv.dueDate.split('T')[0];
+                if (dueDate < dueDateFrom) return false;
+            }
+            if (dueDateTo && inv.dueDate) {
+                const dueDate = inv.dueDate.split('T')[0];
+                if (dueDate > dueDateTo) return false;
+            }
+            
             return true;
         });
 
@@ -301,7 +330,7 @@ class SettlementApp {
         document.getElementById('paymentCount').textContent = payments.length;
         
         if (payments.length === 0) {
-            tbody.innerHTML = '<tr class="loading-row"><td colspan="11">No payments found</td></tr>';
+            tbody.innerHTML = '<tr class="loading-row"><td colspan="10">No payments found</td></tr>';
             return;
         }
 
@@ -326,7 +355,6 @@ class SettlementApp {
                     <td class="col-rate">${exchRate}</td>
                     <td class="col-date">${this.formatDate(pmt.valueDate)}</td>
                     <td class="col-account">${pmt.bankAccountName || pmt.bankAccountNumber || '-'}</td>
-                    <td class="col-strategy">${pmt.strategyName || '-'}</td>
                     <td class="col-dir ${dirClass}">${direction}</td>
                 </tr>
             `;

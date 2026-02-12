@@ -41,6 +41,22 @@
                     <option value="open" selected>Open (Unpaid)</option>
                 </select>
             </div>
+            <div class="filter-group">
+                <label for="issueDateFrom">Issue Date:</label>
+                <div class="date-range">
+                    <input type="date" id="issueDateFrom" placeholder="From">
+                    <span>to</span>
+                    <input type="date" id="issueDateTo" placeholder="To">
+                </div>
+            </div>
+            <div class="filter-group">
+                <label for="dueDateFrom">Due Date:</label>
+                <div class="date-range">
+                    <input type="date" id="dueDateFrom" placeholder="From">
+                    <span>to</span>
+                    <input type="date" id="dueDateTo" placeholder="To">
+                </div>
+            </div>
             <button id="refreshBtn" class="btn btn-primary">
                 <svg class="icon" viewBox="0 0 24 24" width="16" height="16">
                     <path fill="currentColor" d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
@@ -117,13 +133,12 @@
                                 <th class="col-rate">Exch Rate</th>
                                 <th class="col-date">Value Date</th>
                                 <th class="col-account">Bank Account</th>
-                                <th class="col-strategy">Strategy</th>
                                 <th class="col-dir">Dir</th>
                             </tr>
                         </thead>
                         <tbody id="paymentsBody">
                             <tr class="loading-row">
-                                <td colspan="11">Loading payments...</td>
+                                <td colspan="10">Loading payments...</td>
                             </tr>
                         </tbody>
                     </table>
