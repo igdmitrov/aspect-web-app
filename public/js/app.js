@@ -11,6 +11,7 @@ class SettlementApp {
         this.currencies = new Set();
         this.counterpartyChoices = null;
         this.aspectPortalUrl = '';
+        this.editDataEnabled = true;
         
         this.init();
     }
@@ -29,9 +30,26 @@ class SettlementApp {
             if (response.ok) {
                 const config = await response.json();
                 this.aspectPortalUrl = config.aspectPortalUrl || '';
+                this.editDataEnabled = config.editDataEnabled !== false;
+                this.updateEditDataUI();
             }
         } catch (error) {
             console.error('Error loading config:', error);
+        }
+    }
+
+    updateEditDataUI() {
+        // Hide/show edit elements based on editDataEnabled setting
+        const createBtn = document.getElementById('createAllocationBtn');
+        const amountInput = document.getElementById('allocationAmount');
+        
+        if (!this.editDataEnabled) {
+            if (createBtn) {
+                createBtn.style.display = 'none';
+            }
+            if (amountInput) {
+                amountInput.style.display = 'none';
+            }
         }
     }
 
@@ -421,7 +439,7 @@ class SettlementApp {
                     <td>${this.formatDate(allocDate)}</td>
                     <td>${alloc.state || '-'}</td>
                     <td>
-                        <button class="btn btn-sm btn-danger delete-alloc" data-id="${alloc.allocationId || alloc.id}">Delete</button>
+                        ${this.editDataEnabled ? `<button class="btn btn-sm btn-danger delete-alloc" data-id="${alloc.allocationId || alloc.id}">Delete</button>` : ''}
                     </td>
                 </tr>
             `;

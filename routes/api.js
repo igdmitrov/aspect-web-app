@@ -11,10 +11,17 @@ const requireAuth = (req, res, next) => {
     }
 };
 
+// Helper to check if edit data is enabled
+function isEditDataEnabled() {
+    const val = process.env.ENABLE_EDIT_DATA;
+    return val === undefined || val === '' || val.toLowerCase() === 'true';
+}
+
 // Config endpoint (no auth required for base URL)
 router.get('/config', (req, res) => {
     res.json({
-        aspectPortalUrl: process.env.ASPECT_BASE_URL
+        aspectPortalUrl: process.env.ASPECT_BASE_URL,
+        editDataEnabled: isEditDataEnabled()
     });
 });
 
@@ -203,6 +210,11 @@ router.get('/allocations', async (req, res) => {
 
 // Create allocation
 router.post('/allocations', async (req, res) => {
+    // Check if edit data is enabled
+    if (!isEditDataEnabled()) {
+        return res.status(403).json({ error: 'Edit data operations are disabled' });
+    }
+    
     try {
         const { invoiceId, paymentId, amount } = req.body;
         
@@ -225,6 +237,11 @@ router.post('/allocations', async (req, res) => {
 
 // Delete allocation
 router.delete('/allocations/:id', async (req, res) => {
+    // Check if edit data is enabled
+    if (!isEditDataEnabled()) {
+        return res.status(403).json({ error: 'Edit data operations are disabled' });
+    }
+    
     try {
         const data = await postAspectWS('/deleteAllocation', req.session.user.authHeader, {
             allocationId: req.params.id
