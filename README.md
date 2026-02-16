@@ -45,7 +45,7 @@ Deploy these webservices in AspectCTRM (Services > Webservices):
 
 1. **getInvoices** - Already exists in your system
 2. **getPayments** - Use `webservice_getPayments.js`
-3. **getMoneyAllocation** - Already exists in your system
+3. **getLastMoneyAllocation** - Already exists in your system
 4. **createAllocation** - Use `webservice_createAllocation.js`
 
 ### Deploying Webservices

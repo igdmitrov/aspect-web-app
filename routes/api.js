@@ -78,16 +78,20 @@ router.get('/invoices/open', async (req, res) => {
     try {
         // Try optimized getOpenInvoices webservice first
         try {
+            const startTime = Date.now();
             const data = await callAspectWS('/getOpenInvoices', req.session.user.authHeader);
-            console.log(`Loaded ${Array.isArray(data) ? data.length : 0} open invoices from getOpenInvoices`);
+            const elapsed = Date.now() - startTime;
+            console.log(`Loaded ${Array.isArray(data) ? data.length : 0} open invoices from getOpenInvoices in ${elapsed}ms`);
             return res.json(data);
         } catch (err) {
             // Fallback to getInvoices with client-side filter
             if (err.response?.status === 404) {
                 console.log('getOpenInvoices not found, falling back to getInvoices with filter...');
+                const startTime = Date.now();
                 const data = await callAspectWS('/getInvoices', req.session.user.authHeader);
+                const elapsed = Date.now() - startTime;
                 const unpaid = data.filter(inv => Math.abs(inv.invoiceBalance) > 0.01);
-                console.log(`Filtered ${unpaid.length} open invoices from ${data.length} total`);
+                console.log(`Filtered ${unpaid.length} open invoices from ${data.length} total in ${elapsed}ms`);
                 return res.json(unpaid);
             }
             throw err;
@@ -111,7 +115,7 @@ router.get('/invoices/unpaid', async (req, res) => {
 });
 
 // Get all payments
-// Try getPayments first, fallback to extracting from getMoneyAllocation
+// Try getPayments first, fallback to extracting from getLastMoneyAllocation
 router.get('/payments', async (req, res) => {
     try {
         // Try dedicated getPayments webservice first
@@ -122,7 +126,7 @@ router.get('/payments', async (req, res) => {
             // If getPayments doesn't exist (404), extract from allocations
             if (err.response?.status === 404) {
                 console.log('getPayments not found, extracting from allocations...');
-                const allocations = await callAspectWS('/getMoneyAllocation', req.session.user.authHeader);
+                const allocations = await callAspectWS('/getLastMoneyAllocation', req.session.user.authHeader);
                 
                 // Extract unique payments from allocations
                 const paymentsMap = new Map();
@@ -165,16 +169,20 @@ router.get('/payments/open', async (req, res) => {
     try {
         // Try optimized getOpenPayments webservice first
         try {
+            const startTime = Date.now();
             const data = await callAspectWS('/getOpenPayments', req.session.user.authHeader);
-            console.log(`Loaded ${Array.isArray(data) ? data.length : 0} open payments from getOpenPayments`);
+            const elapsed = Date.now() - startTime;
+            console.log(`Loaded ${Array.isArray(data) ? data.length : 0} open payments from getOpenPayments in ${elapsed}ms`);
             return res.json(data);
         } catch (err) {
             // Fallback to getPayments with client-side filter
             if (err.response?.status === 404) {
                 console.log('getOpenPayments not found, falling back to getPayments with filter...');
+                const startTime = Date.now();
                 const data = await callAspectWS('/getPayments', req.session.user.authHeader);
+                const elapsed = Date.now() - startTime;
                 const unallocated = data.filter(pmt => Math.abs(pmt.unallocatedAmount) > 0.01);
-                console.log(`Filtered ${unallocated.length} open payments from ${data.length} total`);
+                console.log(`Filtered ${unallocated.length} open payments from ${data.length} total in ${elapsed}ms`);
                 return res.json(unallocated);
             }
             throw err;
@@ -200,7 +208,10 @@ router.get('/payments/unallocated', async (req, res) => {
 // Get money allocations
 router.get('/allocations', async (req, res) => {
     try {
-        const data = await callAspectWS('/getMoneyAllocation', req.session.user.authHeader);
+        const startTime = Date.now();
+        const data = await callAspectWS('/getLastMoneyAllocation', req.session.user.authHeader);
+        const elapsed = Date.now() - startTime;
+        console.log(`Loaded ${Array.isArray(data) ? data.length : 0} allocations from getLastMoneyAllocation in ${elapsed}ms`);
         res.json(data);
     } catch (error) {
         console.error('Error fetching allocations:', error.message);
@@ -228,6 +239,11 @@ router.post('/allocations', async (req, res) => {
             amount
         });
         
+        // AspectCTRM may return HTTP 200 with an error in the body
+        if (data && data.error) {
+            return res.status(400).json({ error: data.error });
+        }
+        
         res.json(data);
     } catch (error) {
         console.error('Error creating allocation:', error.message);
@@ -242,13 +258,25 @@ router.delete('/allocations/:id', async (req, res) => {
         return res.status(403).json({ error: 'Edit data operations are disabled' });
     }
     
+    const baseUrl = process.env.ASPECT_BASE_URL;
+    const wsPath = process.env.ASPECT_WEBSERVICE_PATH;
+    const url = `${baseUrl}${wsPath}/deleteAllocation`;
+    const payload = { allocationId: req.params.id };
+
+    console.log('[deleteAllocation] URL:', url);
+    console.log('[deleteAllocation] Payload:', JSON.stringify(payload));
+
     try {
-        const data = await postAspectWS('/deleteAllocation', req.session.user.authHeader, {
-            allocationId: req.params.id
-        });
+        const data = await postAspectWS('/deleteAllocation', req.session.user.authHeader, payload);
+        console.log('[deleteAllocation] Response status: OK');
+        console.log('[deleteAllocation] Response data:', JSON.stringify(data));
         res.json(data);
     } catch (error) {
-        console.error('Error deleting allocation:', error.message);
+        console.error('[deleteAllocation] Error:', error.message);
+        if (error.response) {
+            console.error('[deleteAllocation] Response status:', error.response.status);
+            console.error('[deleteAllocation] Response data:', JSON.stringify(error.response.data));
+        }
         res.status(500).json({ error: 'Failed to delete allocation' });
     }
 });

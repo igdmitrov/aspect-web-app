@@ -118,13 +118,16 @@ class SettlementApp {
 
     async loadData() {
         this.showLoading();
+        const t0 = performance.now();
         
         try {
+            const tFetch = performance.now();
             const [invoicesRes, paymentsRes, allocationsRes] = await Promise.all([
                 fetch('/api/invoices/open'),
                 fetch('/api/payments/open'),
                 fetch('/api/allocations')
             ]);
+            console.log(`[timing] fetch all APIs: ${(performance.now() - tFetch).toFixed(0)}ms`);
 
             if (!invoicesRes.ok || !paymentsRes.ok) {
                 if (invoicesRes.status === 401 || paymentsRes.status === 401) {
@@ -134,13 +137,11 @@ class SettlementApp {
                 throw new Error('Failed to load data');
             }
 
+            const tParse = performance.now();
             let invoicesData = await invoicesRes.json();
             let paymentsData = await paymentsRes.json();
             let allocationsData = allocationsRes.ok ? await allocationsRes.json() : [];
-
-            // Debug: log raw response
-            console.log('Raw invoices response:', invoicesData);
-            console.log('Raw payments response:', paymentsData);
+            console.log(`[timing] parse JSON: ${(performance.now() - tParse).toFixed(0)}ms`);
 
             // Ensure data is always an array
             this.invoices = Array.isArray(invoicesData) ? invoicesData : (invoicesData ? [invoicesData] : []);
@@ -148,6 +149,7 @@ class SettlementApp {
             this.allocations = Array.isArray(allocationsData) ? allocationsData : (allocationsData ? [allocationsData] : []);
 
             // Sort invoices by due date (ascending - oldest first)
+            const tSort = performance.now();
             this.invoices.sort((a, b) => {
                 const dateA = a.dueDate ? new Date(a.dueDate) : new Date(0);
                 const dateB = b.dueDate ? new Date(b.dueDate) : new Date(0);
@@ -160,15 +162,40 @@ class SettlementApp {
                 const dateB = b.valueDate ? new Date(b.valueDate) : new Date(0);
                 return dateA - dateB;
             });
+            console.log(`[timing] sort: ${(performance.now() - tSort).toFixed(0)}ms`);
 
-            console.log('Loaded:', this.invoices.length, 'invoices,', this.payments.length, 'payments');
-            if (this.invoices.length > 0) {
-                console.log('First invoice:', this.invoices[0]);
-            }
+            console.log(`Loaded: ${this.invoices.length} invoices, ${this.payments.length} payments, ${this.allocations.length} allocations`);
+
+            const tRender = performance.now();
+            
+            // Save current filter values before rebuilding dropdowns
+            const savedCounterparty = document.getElementById('counterpartyFilter').value;
+            const savedCurrency = document.getElementById('currencyFilter').value;
+            const savedStatus = document.getElementById('statusFilter').value;
+            const savedIssueDateFrom = document.getElementById('issueDateFrom').value;
+            const savedIssueDateTo = document.getElementById('issueDateTo').value;
+            const savedDueDateFrom = document.getElementById('dueDateFrom').value;
+            const savedDueDateTo = document.getElementById('dueDateTo').value;
 
             this.extractFilters();
+
+            // Restore saved filter values
+            if (savedCurrency && Array.from(this.currencies).includes(savedCurrency)) {
+                document.getElementById('currencyFilter').value = savedCurrency;
+            }
+            document.getElementById('statusFilter').value = savedStatus;
+            document.getElementById('issueDateFrom').value = savedIssueDateFrom;
+            document.getElementById('issueDateTo').value = savedIssueDateTo;
+            document.getElementById('dueDateFrom').value = savedDueDateFrom;
+            document.getElementById('dueDateTo').value = savedDueDateTo;
+            if (savedCounterparty && this.counterparties.includes(savedCounterparty)) {
+                this.counterpartyChoices.setChoiceByValue(savedCounterparty);
+            }
+
             this.applyFilters();
             this.renderAllocations();
+            console.log(`[timing] render: ${(performance.now() - tRender).toFixed(0)}ms`);
+            console.log(`[timing] total loadData: ${(performance.now() - t0).toFixed(0)}ms`);
             
         } catch (error) {
             console.error('Error loading data:', error);
@@ -290,6 +317,7 @@ class SettlementApp {
     }
 
     renderInvoices(invoices) {
+        const tStart = performance.now();
         const tbody = document.getElementById('invoicesBody');
         document.getElementById('invoiceCount').textContent = invoices.length;
         
@@ -327,23 +355,23 @@ class SettlementApp {
             `;
         }).join('');
 
-        // Bind radio button events
-        tbody.querySelectorAll('.invoice-radio').forEach(rb => {
-            rb.addEventListener('change', (e) => {
-                const id = e.target.dataset.id;
-                // Clear previous selection styling
-                tbody.querySelectorAll('tr.selected').forEach(tr => tr.classList.remove('selected'));
-                // Set new selection
-                this.selectedInvoice = id;
-                e.target.closest('tr').classList.add('selected');
-                this.updateSummary();
-            });
-        });
+        // Use event delegation instead of individual listeners
+        tbody.onclick = (e) => {
+            const rb = e.target.closest('.invoice-radio');
+            if (!rb) return;
+            const id = rb.dataset.id;
+            tbody.querySelectorAll('tr.selected').forEach(tr => tr.classList.remove('selected'));
+            this.selectedInvoice = id;
+            rb.closest('tr').classList.add('selected');
+            this.updateSummary();
+        };
 
         this.updateSummary();
+        console.log(`[timing] renderInvoices (${invoices.length} rows): ${(performance.now() - tStart).toFixed(0)}ms`);
     }
 
     renderPayments(payments) {
+        const tStart = performance.now();
         const tbody = document.getElementById('paymentsBody');
         document.getElementById('paymentCount').textContent = payments.length;
         
@@ -378,20 +406,19 @@ class SettlementApp {
             `;
         }).join('');
 
-        // Bind radio button events
-        tbody.querySelectorAll('.payment-radio').forEach(rb => {
-            rb.addEventListener('change', (e) => {
-                const id = e.target.dataset.id;
-                // Clear previous selection styling
-                tbody.querySelectorAll('tr.selected').forEach(tr => tr.classList.remove('selected'));
-                // Set new selection
-                this.selectedPayment = id;
-                e.target.closest('tr').classList.add('selected');
-                this.updateSummary();
-            });
-        });
+        // Use event delegation instead of individual listeners
+        tbody.onclick = (e) => {
+            const rb = e.target.closest('.payment-radio');
+            if (!rb) return;
+            const id = rb.dataset.id;
+            tbody.querySelectorAll('tr.selected').forEach(tr => tr.classList.remove('selected'));
+            this.selectedPayment = id;
+            rb.closest('tr').classList.add('selected');
+            this.updateSummary();
+        };
 
         this.updateSummary();
+        console.log(`[timing] renderPayments (${payments.length} rows): ${(performance.now() - tStart).toFixed(0)}ms`);
     }
 
     renderAllocations() {
@@ -405,22 +432,25 @@ class SettlementApp {
             return;
         }
 
-        // Sort by date descending (newest first) and show last 20
+        // Sort by date descending (newest first) and show max 200
         const sorted = [...this.allocations].sort((a, b) => {
             const dateA = new Date(a.createdDate || a.createDate || a.entryDate || a.paymentValueDate || 0);
             const dateB = new Date(b.createdDate || b.createDate || b.entryDate || b.paymentValueDate || 0);
             return dateB - dateA; // Descending (newest first)
         });
-        const recent = sorted.slice(0, 20);
+        const recent = sorted.slice(0, 200);
         
         tbody.innerHTML = recent.map(alloc => {
             // Try multiple field names for invoice
-            const invoiceRef = alloc.invoiceNumber || alloc.invoiceName || alloc.targetName || 
-                               alloc.invoiceReference || (alloc.invoiceId ? alloc.invoiceId.substring(0, 10) : '-');
+            // Direction-aware: for incoming invoices source=invoice/target=payment, for outgoing source=payment/target=invoice
+            const invoiceFallbackName = alloc.isIncoming ? alloc.sourceName : alloc.targetName;
+            const invoiceRef = alloc.invoiceNumber || alloc.invoiceName || alloc.invoiceReference || 
+                               invoiceFallbackName || (alloc.invoiceId ? alloc.invoiceId.substring(0, 10) : '-');
             
             // Try multiple field names for payment
-            const paymentRef = alloc.paymentReference || alloc.paymentName || alloc.sourceName ||
-                               (alloc.paymentId ? alloc.paymentId.substring(0, 10) : '-');
+            const paymentFallbackName = alloc.isIncoming ? alloc.targetName : alloc.sourceName;
+            const paymentRef = alloc.paymentReference || alloc.paymentName || 
+                               paymentFallbackName || (alloc.paymentId ? alloc.paymentId.substring(0, 10) : '-');
             
             // Get date from various possible fields
             const allocDate = alloc.createdDate || alloc.createDate || alloc.entryDate || alloc.paymentValueDate || alloc.date;
@@ -431,8 +461,8 @@ class SettlementApp {
             return `
                 <tr>
                     <td>${alloc.allocationName || alloc.name || (alloc.allocationId ? alloc.allocationId.substring(0, 8) : '-')}</td>
-                    <td>${invoiceRef}</td>
-                    <td>${paymentRef}</td>
+                    <td>${this.createAspectLink(alloc.invoiceId, invoiceRef)}</td>
+                    <td>${this.createAspectLink(alloc.paymentId, paymentRef)}</td>
                     <td>${counterparty}</td>
                     <td>${this.formatNumber(alloc.amount)}</td>
                     <td>${alloc.currency || '-'}</td>
@@ -528,7 +558,7 @@ class SettlementApp {
 
             const data = await response.json();
 
-            if (response.ok) {
+            if (response.ok && !data.error) {
                 this.showMessage('Allocation created successfully', 'success');
                 
                 // Clear selections and reload
@@ -553,7 +583,7 @@ class SettlementApp {
         if (!confirm('Delete this allocation?')) return;
 
         try {
-            const response = await fetch(`/api/allocations/${id}`, { method: 'DELETE' });
+            const response = await fetch(`/api/allocations/${encodeURIComponent(id)}`, { method: 'DELETE' });
             
             if (response.ok) {
                 this.showMessage('Allocation deleted', 'success');
