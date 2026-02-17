@@ -206,6 +206,16 @@ body {
     color: var(--text-secondary);
 }
 
+.base-url-label {
+    font-size: 0.65rem;
+    color: var(--primary-color);
+    background: rgba(37, 99, 235, 0.1);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    margin-left: 10px;
+    font-family: monospace;
+}
+
 .header-right {
     display: flex;
     align-items: center;

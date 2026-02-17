@@ -32,9 +32,17 @@ class SettlementApp {
                 this.aspectPortalUrl = config.aspectPortalUrl || '';
                 this.editDataEnabled = config.editDataEnabled !== false;
                 this.updateEditDataUI();
+                this.updateBaseUrlLabel();
             }
         } catch (error) {
             console.error('Error loading config:', error);
+        }
+    }
+
+    updateBaseUrlLabel() {
+        const baseUrlLabel = document.getElementById('baseUrlLabel');
+        if (baseUrlLabel && this.aspectPortalUrl) {
+            baseUrlLabel.textContent = this.aspectPortalUrl;
         }
     }
 
