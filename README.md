@@ -626,18 +626,7 @@ sudo -u webapps /var/www/apps/deploy.sh aspect-web-app
 
 Automate deployments when you push to the main branch.
 
-### Choose Your Setup
-
-| Server Type | Solution |
-|-------------|----------|
-| **Public server** (accessible from internet) | Standard GitHub Actions (SSH) |
-| **Private server** (behind VPN/firewall) | Self-hosted Runner (recommended) |
-
----
-
-## Option A: Self-Hosted Runner (For VPN/Private Servers)
-
-Your server connects OUT to GitHub (works behind VPN/firewall).
+Since your server is behind VPN, use a **Self-Hosted Runner** - it connects OUT to GitHub (no incoming connections needed).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
