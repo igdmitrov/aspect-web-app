@@ -1,0 +1,80 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
+
+env:
+  # Change this for each app repository
+  APP_NAME: aspect-web-app
+  APP_DIR: /var/www/apps/aspect-web-app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test --if-present
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            APP_NAME="${{ env.APP_NAME }}"
+            APP_DIR="${{ env.APP_DIR }}"
+            
+            cd ${APP_DIR}
+            
+            echo "📦 Pulling latest code for ${APP_NAME}..."
+            git fetch origin main
+            git reset --hard origin/main
+            
+            echo "📥 Installing dependencies..."
+            npm install --production
+            
+            echo "🔄 Restarting ${APP_NAME}..."
+            sudo /bin/systemctl restart ${APP_NAME}
+            
+            echo "✅ Deployment complete!"
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            APP_NAME="${{ env.APP_NAME }}"
+            
+            # Wait for service to start
+            sleep 3
+            
+            # Check if service is running
+            if sudo /bin/systemctl is-active --quiet ${APP_NAME}; then
+              echo "✅ ${APP_NAME} is running"
+              sudo /bin/systemctl status ${APP_NAME} --no-pager
+            else
+              echo "❌ ${APP_NAME} failed to start"
+              sudo /bin/systemctl status ${APP_NAME} --no-pager
+              exit 1
+            fi

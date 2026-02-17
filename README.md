@@ -112,6 +112,771 @@ aspect-web-app/
 | `/api/allocations` | POST | Create allocation |
 | `/api/allocations/:id` | DELETE | Delete allocation |
 
+## Deployment on CentOS Stream 9
+
+This guide supports deploying **multiple similar web apps** on the same VM.
+
+**Architecture Overview:**
+```
+CentOS Stream 9 Server
+├── /var/www/apps/
+│   ├── aspect-web-app/        (Port 3001) → settlement.domain.com
+│   ├── aspect-reports-app/    (Port 3002) → reports.domain.com
+│   └── aspect-trading-app/    (Port 3003) → trading.domain.com
+├── Nginx (reverse proxy, SSL termination)
+├── Systemd (service management)
+└── GitHub Actions (CI/CD)
+```
+
+### 1. System Preparation
+
+```bash
+# Update system
+sudo dnf update -y
+
+# Install EPEL repository
+sudo dnf install -y epel-release
+
+# Install required packages
+sudo dnf install -y git curl wget firewalld
+```
+
+### 2. Install Node.js
+
+```bash
+# Install Node.js 20.x (LTS)
+curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+sudo dnf install -y nodejs
+
+# Verify installation
+node --version
+npm --version
+```
+
+### 3. Create Application User and Directory Structure
+
+For deploying multiple web apps on the same VM:
+
+```bash
+# Create a dedicated user for all web apps
+sudo useradd -r -m -s /bin/bash webapps
+
+# Create apps directory structure
+sudo mkdir -p /var/www/apps
+sudo chown webapps:webapps /var/www/apps
+
+# Switch to the user (for app setup)
+sudo su - webapps
+```
+
+**Directory structure for multiple apps:**
+```
+/var/www/apps/
+├── aspect-web-app/          # Port 3001
+├── aspect-reports-app/       # Port 3002
+├── aspect-trading-app/       # Port 3003
+└── aspect-admin-app/         # Port 3004
+```
+
+### 4. Deploy the Application from GitHub
+
+```bash
+# As webapps user
+cd /var/www/apps
+
+# Option A: Public repository
+git clone https://github.com/your-username/aspect-web-app.git
+
+# Option B: Private repository with HTTPS (will prompt for credentials)
+git clone https://github.com/your-username/aspect-web-app.git
+# Enter your GitHub username and Personal Access Token (PAT) when prompted
+
+# Option C: Private repository with SSH key
+# First, generate SSH key as webapps user
+ssh-keygen -t ed25519 -C "webapps@your-server"
+cat ~/.ssh/id_ed25519.pub
+# Add this public key to GitHub: Settings > SSH and GPG keys > New SSH key
+
+# Then clone via SSH
+git clone git@github.com:your-username/aspect-web-app.git
+
+cd aspect-web-app
+
+# Install dependencies
+npm install --production
+```
+
+#### Setting up GitHub Personal Access Token (for private repos)
+
+1. Go to GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
+2. Click "Generate new token (classic)"
+3. Give it a name like "CentOS Server Deploy"
+4. Select scopes: `repo` (full control of private repositories)
+5. Generate and copy the token
+
+```bash
+# Store credentials to avoid re-entering (as aspectapp user)
+git config --global credential.helper store
+
+# First pull will prompt for credentials, then they're saved
+git pull
+# Username: your-github-username
+# Password: paste-your-personal-access-token
+```
+
+#### Alternative: Deploy via SCP (without Git on server)
+
+From your local machine:
+```bash
+# Copy application files to server
+scp -r aspect-web-app/ user@your-server:/tmp/
+
+# SSH to server and move files
+ssh user@your-server
+sudo mv /tmp/aspect-web-app /var/www/apps/
+sudo chown -R webapps:webapps /var/www/apps/aspect-web-app
+```
+
+### 5. Configure the Application
+
+**Important:** Each app must use a unique PORT to avoid conflicts.
+
+| App Name | Port |
+|----------|------|
+| aspect-web-app | 3001 |
+| aspect-reports-app | 3002 |
+| aspect-trading-app | 3003 |
+| aspect-admin-app | 3004 |
+
+```bash
+# Create .env file (adjust PORT for each app)
+cat > .env << 'EOF'
+# AspectCTRM Server Configuration
+ASPECT_BASE_URL=http://your-aspect-server:60000
+ASPECT_WEBSERVICE_PATH=/webservice/aspectrs
+
+# Server Configuration - USE UNIQUE PORT PER APP!
+PORT=3001
+SESSION_SECRET=generate-a-strong-secret-key-here
+SESSION_TIMEOUT=1800000
+EOF
+
+# Generate a strong secret key (unique per app)
+echo "SESSION_SECRET=$(openssl rand -hex 32)" >> .env
+
+# Exit webapps user
+exit
+```
+
+### 6. Create Systemd Service
+
+Create a separate service file for each app. Replace `APP_NAME` with your app name:
+
+```bash
+# Set app name variable (change this for each app)
+APP_NAME="aspect-web-app"
+
+# Create service file
+sudo tee /etc/systemd/system/${APP_NAME}.service << EOF
+[Unit]
+Description=${APP_NAME} - AspectCTRM Web Application
+Documentation=https://github.com/your-repo
+After=network.target
+
+[Service]
+Type=simple
+User=webapps
+Group=webapps
+WorkingDirectory=/var/www/apps/${APP_NAME}
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=${APP_NAME}
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Reload systemd and enable service
+sudo systemctl daemon-reload
+sudo systemctl enable ${APP_NAME}
+sudo systemctl start ${APP_NAME}
+
+# Check status
+sudo systemctl status ${APP_NAME}
+```
+
+**Quick setup script for new apps:**
+
+```bash
+#!/bin/bash
+# Usage: ./create-app-service.sh app-name
+APP_NAME=$1
+
+if [ -z "$APP_NAME" ]; then
+  echo "Usage: $0 <app-name>"
+  exit 1
+fi
+
+sudo tee /etc/systemd/system/${APP_NAME}.service << EOF
+[Unit]
+Description=${APP_NAME} - AspectCTRM Web Application
+After=network.target
+
+[Service]
+Type=simple
+User=webapps
+Group=webapps
+WorkingDirectory=/var/www/apps/${APP_NAME}
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=10
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable ${APP_NAME}
+sudo systemctl start ${APP_NAME}
+echo "Service ${APP_NAME} created and started!"
+```
+
+### 7. Configure Firewall
+
+When using Nginx reverse proxy (recommended), you only need to open port 80/443:
+
+```bash
+# Start and enable firewalld
+sudo systemctl enable --now firewalld
+
+# With Nginx (recommended) - only open HTTP/HTTPS
+sudo firewall-cmd --permanent --add-service=http
+sudo firewall-cmd --permanent --add-service=https
+sudo firewall-cmd --reload
+
+# Without Nginx - open ports for each app directly
+# sudo firewall-cmd --permanent --add-port=3001/tcp
+# sudo firewall-cmd --permanent --add-port=3002/tcp
+# sudo firewall-cmd --permanent --add-port=3003/tcp
+# sudo firewall-cmd --reload
+
+# Verify
+sudo firewall-cmd --list-all
+```
+
+### 8. (Recommended) Setup Nginx Reverse Proxy for Multiple Apps
+
+Use Nginx as a reverse proxy to route traffic to different apps via subdomains or paths:
+
+```bash
+# Install Nginx
+sudo dnf install -y nginx
+```
+
+**Option A: Subdomain-based routing** (Recommended)
+
+Each app gets its own subdomain:
+- `settlement.yourdomain.com` → aspect-web-app (port 3001)
+- `reports.yourdomain.com` → aspect-reports-app (port 3002)
+- `trading.yourdomain.com` → aspect-trading-app (port 3003)
+
+```bash
+# Create a config file for each app
+# App 1: aspect-web-app
+sudo tee /etc/nginx/conf.d/aspect-web-app.conf << 'EOF'
+server {
+    listen 80;
+    server_name settlement.yourdomain.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+EOF
+
+# App 2: aspect-reports-app
+sudo tee /etc/nginx/conf.d/aspect-reports-app.conf << 'EOF'
+server {
+    listen 80;
+    server_name reports.yourdomain.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:3002;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+EOF
+```
+
+**Option B: Path-based routing**
+
+All apps on one domain with different paths:
+- `yourdomain.com/settlement/` → aspect-web-app (port 3001)
+- `yourdomain.com/reports/` → aspect-reports-app (port 3002)
+
+```bash
+sudo tee /etc/nginx/conf.d/aspect-apps.conf << 'EOF'
+server {
+    listen 80;
+    server_name yourdomain.com;
+
+    # App 1: Settlement
+    location /settlement/ {
+        proxy_pass http://127.0.0.1:3001/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # App 2: Reports
+    location /reports/ {
+        proxy_pass http://127.0.0.1:3002/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # App 3: Trading
+    location /trading/ {
+        proxy_pass http://127.0.0.1:3003/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+EOF
+```
+
+**Start Nginx:**
+
+```bash
+# Test configuration
+sudo nginx -t
+
+# Enable and start Nginx
+sudo systemctl enable --now nginx
+
+# Configure SELinux for proxy
+sudo setsebool -P httpd_can_network_connect 1
+```
+
+### 9. (Optional) SSL with Let's Encrypt
+
+**For subdomain-based setup:**
+```bash
+# Install certbot
+sudo dnf install -y certbot python3-certbot-nginx
+
+# Obtain certificates for all subdomains
+sudo certbot --nginx -d settlement.yourdomain.com -d reports.yourdomain.com -d trading.yourdomain.com
+
+# Auto-renewal is configured automatically
+sudo systemctl enable --now certbot-renew.timer
+```
+
+**For single domain with paths:**
+```bash
+sudo certbot --nginx -d yourdomain.com
+```
+
+### 10. Useful Commands
+
+Replace `APP_NAME` with your app name (e.g., `aspect-web-app`):
+
+```bash
+# Set app name
+APP_NAME="aspect-web-app"
+
+# View logs
+sudo journalctl -u ${APP_NAME} -f
+
+# Restart service
+sudo systemctl restart ${APP_NAME}
+
+# Stop service
+sudo systemctl stop ${APP_NAME}
+
+# Start service
+sudo systemctl start ${APP_NAME}
+
+# Check status
+sudo systemctl status ${APP_NAME}
+
+# List all aspect apps
+sudo systemctl list-units --type=service | grep aspect
+
+# Check all app ports
+sudo ss -tlnp | grep -E '300[1-9]'
+
+# Restart all apps
+for svc in aspect-web-app aspect-reports-app aspect-trading-app; do
+  sudo systemctl restart $svc 2>/dev/null && echo "Restarted $svc"
+done
+```
+
+### 11. Update Application from GitHub
+
+```bash
+# Set app name
+APP_NAME="aspect-web-app"
+
+# Stop service
+sudo systemctl stop ${APP_NAME}
+
+# Update code (as webapps user)
+sudo su - webapps
+cd /var/www/apps/${APP_NAME}
+
+# Pull latest changes from GitHub
+git pull origin main
+
+# Update dependencies (if package.json changed)
+npm install --production
+
+# Exit and restart
+exit
+sudo systemctl start ${APP_NAME}
+
+# Verify service is running
+sudo systemctl status ${APP_NAME}
+```
+
+#### Automated Deployment Script
+
+Create a reusable deployment script for any app:
+
+```bash
+# Create deploy script
+sudo tee /var/www/apps/deploy.sh << 'EOF'
+#!/bin/bash
+set -e
+
+APP_NAME=$1
+
+if [ -z "$APP_NAME" ]; then
+  echo "Usage: $0 <app-name>"
+  echo "Example: $0 aspect-web-app"
+  exit 1
+fi
+
+APP_DIR="/var/www/apps/${APP_NAME}"
+
+if [ ! -d "$APP_DIR" ]; then
+  echo "Error: App directory $APP_DIR does not exist"
+  exit 1
+fi
+
+echo "Stopping ${APP_NAME}..."
+sudo systemctl stop ${APP_NAME}
+
+echo "Pulling latest code..."
+cd ${APP_DIR}
+git pull origin main
+
+echo "Installing dependencies..."
+npm install --production
+
+echo "Starting ${APP_NAME}..."
+sudo systemctl start ${APP_NAME}
+
+echo "Deployment complete!"
+sudo systemctl status ${APP_NAME} --no-pager
+EOF
+
+sudo chown webapps:webapps /var/www/apps/deploy.sh
+sudo chmod +x /var/www/apps/deploy.sh
+
+# Usage:
+sudo -u webapps /var/www/apps/deploy.sh aspect-web-app
+```
+
+## CI/CD with GitHub Actions
+
+Automate deployments when you push to the main branch.
+
+### 1. Server Preparation
+
+```bash
+# On your CentOS server, create SSH key for GitHub Actions
+sudo su - webapps
+ssh-keygen -t ed25519 -f ~/.ssh/github_actions -N ""
+cat ~/.ssh/github_actions.pub >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+
+# Copy the private key (you'll need this for GitHub secrets)
+cat ~/.ssh/github_actions
+# Copy the entire output including -----BEGIN/END-----
+
+exit
+```
+
+Allow webapps to restart services without password (for all apps):
+
+```bash
+# Add sudoers rule for all apps
+sudo tee /etc/sudoers.d/webapps << 'EOF'
+webapps ALL=(ALL) NOPASSWD: /bin/systemctl stop aspect-*
+webapps ALL=(ALL) NOPASSWD: /bin/systemctl start aspect-*
+webapps ALL=(ALL) NOPASSWD: /bin/systemctl restart aspect-*
+webapps ALL=(ALL) NOPASSWD: /bin/systemctl status aspect-*
+webapps ALL=(ALL) NOPASSWD: /bin/systemctl is-active aspect-*
+EOF
+
+sudo chmod 440 /etc/sudoers.d/webapps
+```
+
+### 2. GitHub Repository Secrets
+
+Go to your GitHub repository → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+
+Add these secrets:
+
+| Secret Name | Value |
+|-------------|-------|
+| `SERVER_HOST` | Your server IP or domain (e.g., `192.168.1.100`) |
+| `SERVER_USER` | `webapps` |
+| `SERVER_SSH_KEY` | The private key from step 1 |
+| `SERVER_PORT` | SSH port (default: `22`) |
+
+### 3. Create GitHub Actions Workflow
+
+Create file `.github/workflows/deploy.yml` in **each app repository**.
+
+**Important:** Change `APP_NAME` and `APP_DIR` for each app:
+
+```yaml
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  # ⚠️ CHANGE THESE FOR EACH APP REPOSITORY
+  APP_NAME: aspect-web-app        # Service name
+  APP_DIR: /var/www/apps/aspect-web-app  # Server path
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test --if-present
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            APP_NAME="${{ env.APP_NAME }}"
+            APP_DIR="${{ env.APP_DIR }}"
+            
+            cd ${APP_DIR}
+            
+            echo "📦 Pulling latest code for ${APP_NAME}..."
+            git fetch origin main
+            git reset --hard origin/main
+            
+            echo "📥 Installing dependencies..."
+            npm install --production
+            
+            echo "🔄 Restarting ${APP_NAME}..."
+            sudo /bin/systemctl restart ${APP_NAME}
+            
+            echo "✅ Deployment complete!"
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            APP_NAME="${{ env.APP_NAME }}"
+            sleep 3
+            if sudo /bin/systemctl is-active --quiet ${APP_NAME}; then
+              echo "✅ ${APP_NAME} is running"
+            else
+              echo "❌ ${APP_NAME} failed to start"
+              exit 1
+            fi
+```
+
+**Example settings for different apps:**
+
+| Repository | APP_NAME | APP_DIR |
+|------------|----------|---------|
+| aspect-web-app | `aspect-web-app` | `/var/www/apps/aspect-web-app` |
+| aspect-reports | `aspect-reports-app` | `/var/www/apps/aspect-reports-app` |
+| aspect-trading | `aspect-trading-app` | `/var/www/apps/aspect-trading-app` |
+
+### 4. (Optional) Add Staging Environment
+
+```yaml
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+env:
+  APP_NAME: aspect-web-app
+  APP_DIR: /var/www/apps/aspect-web-app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set environment
+        id: env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+            echo "host=${{ secrets.PROD_SERVER_HOST }}" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "host=${{ secrets.STAGING_SERVER_HOST }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy to ${{ steps.env.outputs.environment }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ steps.env.outputs.host }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            APP_NAME="${{ env.APP_NAME }}"
+            APP_DIR="${{ env.APP_DIR }}"
+            
+            cd ${APP_DIR}
+            git fetch origin ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
+            npm install --production
+            sudo /bin/systemctl restart ${APP_NAME}
+```
+
+### 5. (Optional) Slack/Discord Notifications
+
+Add to your workflow:
+
+```yaml
+      - name: Notify on success
+        if: success()
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "✅ Deployment successful!",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "✅ *Aspect Web App* deployed to production\nCommit: `${{ github.sha }}`\nBy: ${{ github.actor }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          payload: |
+            {
+              "text": "❌ Deployment failed!",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "❌ *Aspect Web App* deployment failed\nCommit: `${{ github.sha }}`\nBy: ${{ github.actor }}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+```
+
+### 6. Workflow Status Badge
+
+Add to your README.md:
+
+```markdown
+![Deploy](https://github.com/your-username/aspect-web-app/actions/workflows/deploy.yml/badge.svg)
+```
+
+### CI/CD Workflow Summary
+
+1. **Push to `main`** → GitHub Actions triggers
+2. **Build & Test** → Validates code
+3. **SSH to Server** → Pulls latest code
+4. **Install deps** → `npm install --production`
+5. **Restart service** → `systemctl restart`
+6. **Verify** → Checks service is healthy
+7. **Notify** → Sends Slack/Discord message (optional)
+
 ## Troubleshooting
 
 ### "Unable to connect to AspectCTRM server"
