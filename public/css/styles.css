@@ -575,12 +575,16 @@ body {
     border-radius: var(--radius);
     box-shadow: var(--shadow);
     flex-shrink: 0;
-    max-height: 200px;
-    overflow: hidden;
 }
 
 .allocations-section .table-wrapper {
-    max-height: 150px;
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.allocations-section .table-wrapper.collapsed {
+    max-height: 0;
+    overflow: hidden;
 }
 
 .section-header {
