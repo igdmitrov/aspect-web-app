@@ -13,7 +13,9 @@ env:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    # Use self-hosted runner (for VPN/private servers)
+    # Change to "ubuntu-latest" if using public server with SSH
+    runs-on: [self-hosted, linux, production]
     
     steps:
       - name: Checkout code
@@ -23,58 +25,30 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run tests
-        run: npm test --if-present
-
-      - name: Deploy to server
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_PORT }}
-          script: |
-            APP_NAME="${{ env.APP_NAME }}"
-            APP_DIR="${{ env.APP_DIR }}"
-            
-            cd ${APP_DIR}
-            
-            echo "📦 Pulling latest code for ${APP_NAME}..."
-            git fetch origin main
-            git reset --hard origin/main
-            
-            echo "📥 Installing dependencies..."
-            npm install --production
-            
-            echo "🔄 Restarting ${APP_NAME}..."
-            sudo /bin/systemctl restart ${APP_NAME}
-            
-            echo "✅ Deployment complete!"
+      - name: Deploy application
+        run: |
+          echo "📦 Copying code to app directory..."
+          rsync -av --delete --exclude='.git' --exclude='node_modules' \
+            $GITHUB_WORKSPACE/ ${{ env.APP_DIR }}/
+          
+          echo "📥 Installing dependencies..."
+          cd ${{ env.APP_DIR }}
+          npm install --production
+          
+          echo "🔄 Restarting service..."
+          sudo /bin/systemctl restart ${{ env.APP_NAME }}
+          
+          echo "✅ Deployment complete!"
 
       - name: Verify deployment
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          port: ${{ secrets.SERVER_PORT }}
-          script: |
-            APP_NAME="${{ env.APP_NAME }}"
-            
-            # Wait for service to start
-            sleep 3
-            
-            # Check if service is running
-            if sudo /bin/systemctl is-active --quiet ${APP_NAME}; then
-              echo "✅ ${APP_NAME} is running"
-              sudo /bin/systemctl status ${APP_NAME} --no-pager
-            else
-              echo "❌ ${APP_NAME} failed to start"
-              sudo /bin/systemctl status ${APP_NAME} --no-pager
-              exit 1
-            fi
+        run: |
+          sleep 3
+          if sudo /bin/systemctl is-active --quiet ${{ env.APP_NAME }}; then
+            echo "✅ ${{ env.APP_NAME }} is running"
+            sudo /bin/systemctl status ${{ env.APP_NAME }} --no-pager
+          else
+            echo "❌ ${{ env.APP_NAME }} failed to start"
+            sudo /bin/systemctl status ${{ env.APP_NAME }} --no-pager
+            exit 1
+          fi

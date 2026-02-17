@@ -626,7 +626,210 @@ sudo -u webapps /var/www/apps/deploy.sh aspect-web-app
 
 Automate deployments when you push to the main branch.
 
-### 1. Server Preparation
+### Choose Your Setup
+
+| Server Type | Solution |
+|-------------|----------|
+| **Public server** (accessible from internet) | Standard GitHub Actions (SSH) |
+| **Private server** (behind VPN/firewall) | Self-hosted Runner (recommended) |
+
+---
+
+## Option A: Self-Hosted Runner (For VPN/Private Servers)
+
+Your server connects OUT to GitHub (works behind VPN/firewall).
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│              SELF-HOSTED RUNNER (VPN-friendly!)                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   YOUR SERVER (behind VPN)              GITHUB (cloud)              │
+│   ────────────────────────              ──────────────              │
+│                                                                     │
+│   GitHub Runner ─────────────────────► Connects OUT to GitHub       │
+│   (installed on your server)           (only outbound, no inbound!) │
+│         │                                                           │
+│         │  When you push:                                           │
+│         │  1. GitHub tells runner "new job!"                        │
+│         │  2. Runner pulls the code                                 │
+│         │  3. Runner runs deployment locally                        │
+│         │  4. Done! No SSH needed                                   │
+│         ▼                                                           │
+│   Deploys locally                                                   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 1. Install Self-Hosted Runner on Your Server
+
+```bash
+# Login to your CentOS server (via VPN)
+# As root or sudo user
+
+# Create runner directory
+sudo mkdir -p /opt/actions-runner
+sudo chown webapps:webapps /opt/actions-runner
+cd /opt/actions-runner
+
+# Download latest runner (check GitHub for latest version)
+curl -o actions-runner-linux-x64-2.311.0.tar.gz -L \
+  https://github.com/actions/runner/releases/download/v2.311.0/actions-runner-linux-x64-2.311.0.tar.gz
+
+# Extract
+tar xzf ./actions-runner-linux-x64-2.311.0.tar.gz
+
+# Install dependencies
+sudo ./bin/installdependencies.sh
+```
+
+### 2. Register Runner with GitHub
+
+Go to your GitHub repository:
+1. **Settings** → **Actions** → **Runners** → **New self-hosted runner**
+2. Select **Linux** and **x64**
+3. Copy the token shown on the page
+
+```bash
+# On your server, as webapps user
+sudo su - webapps
+cd /opt/actions-runner
+
+# Configure (replace YOUR_TOKEN with the token from GitHub)
+./config.sh --url https://github.com/YOUR_USERNAME/aspect-web-app --token YOUR_TOKEN
+
+# When prompted:
+# - Runner group: press Enter (default)
+# - Runner name: press Enter (default) or enter a name like "centos-server"
+# - Labels: enter "self-hosted,linux,x64,production"
+# - Work folder: press Enter (default)
+```
+
+### 3. Install Runner as Service
+
+```bash
+# Install and start service (as root/sudo)
+sudo ./svc.sh install webapps
+sudo ./svc.sh start
+
+# Check status
+sudo ./svc.sh status
+
+# The runner will auto-start on boot
+```
+
+### 4. Update Workflow for Self-Hosted Runner
+
+Update `.github/workflows/deploy.yml`:
+
+```yaml
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  APP_NAME: aspect-web-app
+  APP_DIR: /var/www/apps/aspect-web-app
+
+jobs:
+  deploy:
+    # Use self-hosted runner instead of GitHub's servers
+    runs-on: [self-hosted, linux, production]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Deploy application
+        run: |
+          echo "📦 Copying code to app directory..."
+          rsync -av --delete --exclude='.git' --exclude='node_modules' \
+            $GITHUB_WORKSPACE/ ${{ env.APP_DIR }}/
+          
+          echo "📥 Installing dependencies..."
+          cd ${{ env.APP_DIR }}
+          npm install --production
+          
+          echo "🔄 Restarting service..."
+          sudo /bin/systemctl restart ${{ env.APP_NAME }}
+          
+          echo "✅ Deployment complete!"
+
+      - name: Verify deployment
+        run: |
+          sleep 3
+          if sudo /bin/systemctl is-active --quiet ${{ env.APP_NAME }}; then
+            echo "✅ ${{ env.APP_NAME }} is running"
+          else
+            echo "❌ ${{ env.APP_NAME }} failed to start"
+            sudo /bin/systemctl status ${{ env.APP_NAME }} --no-pager
+            exit 1
+          fi
+```
+
+### 5. Verify Runner is Connected
+
+Go to GitHub: **Settings** → **Actions** → **Runners**
+
+You should see your runner with a green "Idle" status.
+
+---
+
+## Option B: Standard GitHub Actions (For Public Servers)
+
+If your server is accessible from the internet, use SSH-based deployment.
+
+### How It Works (No Installation Required!)
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         HOW GITHUB ACTIONS WORKS                    │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   YOU (developer)              GITHUB (cloud)         YOUR SERVER   │
+│   ──────────────              ──────────────         ────────────   │
+│                                                                     │
+│   1. git push ──────────────► GitHub receives                       │
+│                               your code                             │
+│                                     │                               │
+│                                     ▼                               │
+│                               2. GitHub Actions                     │
+│                                  starts automatically               │
+│                                  (runs on GitHub's                  │
+│                                   servers, NOT yours)               │
+│                                     │                               │
+│                                     ▼                               │
+│                               3. GitHub connects ───────► SSH       │
+│                                  via SSH to your          │         │
+│                                  server                   ▼         │
+│                                                     4. Pulls code   │
+│                                                        runs npm     │
+│                                                        restarts app │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**What you need to install:**
+
+| Location | What to Install |
+|----------|-----------------|
+| **GitHub** (cloud) | Nothing - it's already there! |
+| **Your CentOS Server** | Only SSH server (already installed by default) |
+
+**That's it!** GitHub Actions runs on GitHub's infrastructure. It connects to your server via SSH (like you do from your laptop) and runs commands remotely.
+
+### 1. Server Preparation (Only SSH Setup)
+
+Your server just needs SSH access enabled and an SSH key for GitHub to use:
 
 ```bash
 # On your CentOS server, create SSH key for GitHub Actions
@@ -635,9 +838,9 @@ ssh-keygen -t ed25519 -f ~/.ssh/github_actions -N ""
 cat ~/.ssh/github_actions.pub >> ~/.ssh/authorized_keys
 chmod 600 ~/.ssh/authorized_keys
 
-# Copy the private key (you'll need this for GitHub secrets)
+# Copy the PRIVATE key (you'll paste this into GitHub)
 cat ~/.ssh/github_actions
-# Copy the entire output including -----BEGIN/END-----
+# Copy the ENTIRE output including -----BEGIN/END-----
 
 exit
 ```
@@ -657,22 +860,30 @@ EOF
 sudo chmod 440 /etc/sudoers.d/webapps
 ```
 
-### 2. GitHub Repository Secrets
+### 2. Add Secrets to GitHub (One Time Setup)
 
-Go to your GitHub repository → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+Go to your GitHub repository in browser:
 
-Add these secrets:
+1. Click **Settings** (tab at top)
+2. Click **Secrets and variables** (left sidebar)
+3. Click **Actions**
+4. Click **New repository secret**
+5. Add each secret below:
 
-| Secret Name | Value |
-|-------------|-------|
-| `SERVER_HOST` | Your server IP or domain (e.g., `192.168.1.100`) |
+| Secret Name | What to Enter |
+|-------------|---------------|
+| `SERVER_HOST` | Your server IP (e.g., `192.168.1.100` or `myserver.com`) |
 | `SERVER_USER` | `webapps` |
-| `SERVER_SSH_KEY` | The private key from step 1 |
-| `SERVER_PORT` | SSH port (default: `22`) |
+| `SERVER_SSH_KEY` | Paste the ENTIRE private key from step 1 (including `-----BEGIN...` and `-----END...` lines) |
+| `SERVER_PORT` | `22` (or your SSH port if different) |
 
-### 3. Create GitHub Actions Workflow
+**Note:** These secrets are encrypted. GitHub uses them to connect to your server.
 
-Create file `.github/workflows/deploy.yml` in **each app repository**.
+### 3. Create Workflow File in Your Repository
+
+Create file `.github/workflows/deploy.yml` in **your local project** (not on server!).
+
+This file tells GitHub what to do when you push code.
 
 **Important:** Change `APP_NAME` and `APP_DIR` for each app:
 
@@ -869,15 +1080,81 @@ Add to your README.md:
 
 ### CI/CD Workflow Summary
 
-1. **Push to `main`** → GitHub Actions triggers
-2. **Build & Test** → Validates code
-3. **SSH to Server** → Pulls latest code
-4. **Install deps** → `npm install --production`
-5. **Restart service** → `systemctl restart`
-6. **Verify** → Checks service is healthy
-7. **Notify** → Sends Slack/Discord message (optional)
+**What happens when you `git push`:**
+
+1. **Push to `main`** → GitHub detects the push
+2. **GitHub Actions starts** → Runs on GitHub's servers (not yours!)
+3. **SSH to your server** → GitHub connects using the SSH key you provided
+4. **Pulls latest code** → `git pull` on your server
+5. **Install deps** → `npm install --production`
+6. **Restart service** → `systemctl restart`
+7. **Verify** → Checks service is healthy
+
+### Quick Checklist
+
+**For VPN/Private Servers (Self-Hosted Runner):**
+
+On your CentOS server (one time):
+- [ ] Install GitHub Actions Runner (`/opt/actions-runner`)
+- [ ] Register runner with your GitHub repository
+- [ ] Install runner as systemd service
+- [ ] Add sudoers rule for passwordless service restart
+- [ ] Install rsync: `sudo dnf install -y rsync`
+
+On GitHub (one time per repository):
+- [ ] Create `.github/workflows/deploy.yml` with `runs-on: [self-hosted, linux, production]`
+- [ ] Verify runner shows "Idle" status in Settings → Actions → Runners
+
+**For Public Servers (SSH-based):**
+
+On your CentOS server (one time):
+- [ ] SSH server running (default: yes)
+- [ ] Create SSH key: `ssh-keygen -t ed25519 -f ~/.ssh/github_actions -N ""`
+- [ ] Add public key: `cat ~/.ssh/github_actions.pub >> ~/.ssh/authorized_keys`
+- [ ] Copy private key: `cat ~/.ssh/github_actions`
+- [ ] Add sudoers rule for passwordless service restart
+
+On GitHub (one time per repository):
+- [ ] Add secret `SERVER_HOST` (your server IP)
+- [ ] Add secret `SERVER_USER` (`webapps`)
+- [ ] Add secret `SERVER_SSH_KEY` (paste entire private key)
+- [ ] Add secret `SERVER_PORT` (`22`)
+- [ ] Create `.github/workflows/deploy.yml` file
+
+**That's it! Now every `git push` auto-deploys.**
 
 ## Troubleshooting
+
+### Self-Hosted Runner Issues
+
+**Runner shows "Offline" in GitHub:**
+```bash
+# Check runner service status
+sudo /opt/actions-runner/svc.sh status
+
+# Restart runner
+sudo /opt/actions-runner/svc.sh stop
+sudo /opt/actions-runner/svc.sh start
+
+# Check logs
+journalctl -u actions.runner.* -f
+```
+
+**"Permission denied" during deployment:**
+```bash
+# Ensure webapps owns app directory
+sudo chown -R webapps:webapps /var/www/apps
+
+# Ensure sudoers rule is correct
+sudo visudo -cf /etc/sudoers.d/webapps
+```
+
+**rsync not found:**
+```bash
+sudo dnf install -y rsync
+```
+
+### Application Issues
 
 ### "Unable to connect to AspectCTRM server"
 - Check `ASPECT_BASE_URL` in `.env`
