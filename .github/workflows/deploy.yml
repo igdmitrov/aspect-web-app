@@ -43,12 +43,11 @@ jobs:
 
       - name: Verify deployment
         run: |
-          sleep 3
+          sleep 5
+          sudo /bin/systemctl status ${{ env.APP_NAME }} --no-pager
           if sudo /bin/systemctl is-active --quiet ${{ env.APP_NAME }}; then
-            echo "✅ ${{ env.APP_NAME }} is running"
-            sudo /bin/systemctl status ${{ env.APP_NAME }} --no-pager
+            echo "✅ ${{ env.APP_NAME }} is running successfully"
           else
             echo "❌ ${{ env.APP_NAME }} failed to start"
-            sudo /bin/systemctl status ${{ env.APP_NAME }} --no-pager
             exit 1
           fi
