@@ -15,7 +15,7 @@ jobs:
   deploy:
     # Use self-hosted runner (for VPN/private servers)
     # Change to "ubuntu-latest" if using public server with SSH
-    runs-on: [self-hosted, linux, production]
+    runs-on: [self-hosted, Linux]
     
     steps:
       - name: Checkout code
