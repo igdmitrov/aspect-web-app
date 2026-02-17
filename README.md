@@ -771,17 +771,30 @@ Go to GitHub: **Settings** → **Actions** → **Runners**
 
 You should see your runner with a green "Idle" status.
 
----
+### Quick Checklist
 
-## Option B: Standard GitHub Actions (For Public Servers)
+On your CentOS server (one time):
+- [ ] Install GitHub Actions Runner (`/opt/actions-runner`)
+- [ ] Register runner with your GitHub repository
+- [ ] Install runner as systemd service
+- [ ] Add sudoers rule for passwordless service restart
+- [ ] Install rsync: `sudo dnf install -y rsync`
+- [ ] Create app directory: `sudo mkdir -p /var/www/apps/aspect-web-app`
+- [ ] Set ownership: `sudo chown -R webapps:webapps /var/www/apps`
+- [ ] Create systemd service for your app
+- [ ] Create `.env` file with your config
 
-If your server is accessible from the internet, use SSH-based deployment.
+On GitHub (one time per repository):
+- [ ] Create `.github/workflows/deploy.yml` with `runs-on: [self-hosted, linux, production]`
+- [ ] Verify runner shows "Idle" status in Settings → Actions → Runners
 
-### How It Works (No Installation Required!)
+**That's it! Now every `git push` auto-deploys.**
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         HOW GITHUB ACTIONS WORKS                    │
+## Troubleshooting
+
+### Self-Hosted Runner Issues
+
+**Runner shows "Offline" in GitHub:**
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
 │   YOU (developer)              GITHUB (cloud)         YOUR SERVER   │
