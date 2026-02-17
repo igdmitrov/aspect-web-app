@@ -45,9 +45,11 @@ jobs:
         run: |
           sleep 5
           sudo /bin/systemctl status ${{ env.APP_NAME }} --no-pager
-          if sudo /bin/systemctl is-active --quiet ${{ env.APP_NAME }}; then
+          STATUS=$(sudo /bin/systemctl is-active ${{ env.APP_NAME }} || true)
+          echo "Service status: $STATUS"
+          if [ "$STATUS" = "active" ]; then
             echo "✅ ${{ env.APP_NAME }} is running successfully"
           else
-            echo "❌ ${{ env.APP_NAME }} failed to start"
+            echo "❌ ${{ env.APP_NAME }} failed to start (status: $STATUS)"
             exit 1
           fi
