@@ -350,6 +350,7 @@ body {
 .grid-container {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr;
     gap: 15px;
     margin-bottom: 10px;
     flex: 1;
@@ -426,7 +427,8 @@ body {
 
 .data-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     font-size: 0.75rem;
 }
 
@@ -437,12 +439,15 @@ body {
     border-bottom: 1px solid var(--border-color);
 }
 
+.data-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
 .data-table th {
     background: var(--background);
     font-weight: 600;
-    position: sticky;
-    top: 0;
-    z-index: 1;
 }
 
 .data-table th.sortable {
