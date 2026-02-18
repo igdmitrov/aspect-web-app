@@ -13,6 +13,13 @@ class SettlementApp {
         this.aspectPortalUrl = '';
         this.editDataEnabled = true;
         
+        // Sort state for each table
+        this.sortState = {
+            invoices: { column: 'dueDate', direction: 'asc' },
+            payments: { column: 'valueDate', direction: 'asc' },
+            allocations: { column: 'date', direction: 'desc' }
+        };
+        
         this.init();
     }
 
@@ -112,6 +119,137 @@ class SettlementApp {
             const wrapper = document.getElementById('allocationsWrapper');
             wrapper.classList.toggle('collapsed');
         });
+        
+        // Sortable headers
+        this.bindSortEvents();
+    }
+    
+    bindSortEvents() {
+        // Invoices table sorting
+        document.querySelectorAll('#invoicesTable th.sortable').forEach(th => {
+            th.addEventListener('click', () => this.handleSort('invoices', th.dataset.sort, th));
+        });
+        
+        // Payments table sorting
+        document.querySelectorAll('#paymentsTable th.sortable').forEach(th => {
+            th.addEventListener('click', () => this.handleSort('payments', th.dataset.sort, th));
+        });
+        
+        // Allocations table sorting
+        document.querySelectorAll('#allocationsTable th.sortable').forEach(th => {
+            th.addEventListener('click', () => this.handleSort('allocations', th.dataset.sort, th));
+        });
+        
+        // Apply initial sort indicators
+        this.updateSortIndicators();
+    }
+    
+    handleSort(table, column, th) {
+        const state = this.sortState[table];
+        
+        // Toggle direction if same column, otherwise set ascending
+        if (state.column === column) {
+            state.direction = state.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            state.column = column;
+            state.direction = 'asc';
+        }
+        
+        this.updateSortIndicators();
+        
+        // Re-render the appropriate table
+        if (table === 'invoices') {
+            this.applyFilters();
+        } else if (table === 'payments') {
+            this.applyFilters();
+        } else if (table === 'allocations') {
+            this.renderAllocations();
+        }
+    }
+    
+    updateSortIndicators() {
+        // Update invoices table
+        document.querySelectorAll('#invoicesTable th.sortable').forEach(th => {
+            th.classList.remove('sort-asc', 'sort-desc');
+            if (th.dataset.sort === this.sortState.invoices.column) {
+                th.classList.add(`sort-${this.sortState.invoices.direction}`);
+            }
+        });
+        
+        // Update payments table
+        document.querySelectorAll('#paymentsTable th.sortable').forEach(th => {
+            th.classList.remove('sort-asc', 'sort-desc');
+            if (th.dataset.sort === this.sortState.payments.column) {
+                th.classList.add(`sort-${this.sortState.payments.direction}`);
+            }
+        });
+        
+        // Update allocations table
+        document.querySelectorAll('#allocationsTable th.sortable').forEach(th => {
+            th.classList.remove('sort-asc', 'sort-desc');
+            if (th.dataset.sort === this.sortState.allocations.column) {
+                th.classList.add(`sort-${this.sortState.allocations.direction}`);
+            }
+        });
+    }
+    
+    sortData(data, column, direction) {
+        const dateColumns = ['dueDate', 'issueDate', 'valueDate', 'date', 'createdDate', 'createDate', 'entryDate', 'paymentValueDate'];
+        const numericColumns = ['amount', 'invoiceBalance', 'unallocatedAmount', 'exchangeRate'];
+        const boolColumns = ['isIncoming'];
+        
+        return [...data].sort((a, b) => {
+            let valA = a[column];
+            let valB = b[column];
+            
+            // Handle nested or fallback values for allocations
+            if (column === 'date') {
+                valA = a.createdDate || a.createDate || a.entryDate || a.paymentValueDate || a.date;
+                valB = b.createdDate || b.createDate || b.entryDate || b.paymentValueDate || b.date;
+            }
+            if (column === 'invoiceName' && !valA) {
+                valA = a.isIncoming ? a.sourceName : a.targetName;
+            }
+            if (column === 'invoiceName' && !valB) {
+                valB = b.isIncoming ? b.sourceName : b.targetName;
+            }
+            if (column === 'paymentName' && !valA) {
+                valA = a.isIncoming ? a.targetName : a.sourceName;
+            }
+            if (column === 'paymentName' && !valB) {
+                valB = b.isIncoming ? b.targetName : b.sourceName;
+            }
+            if (column === 'allocationName' && !valA) {
+                valA = a.name || a.allocationId;
+            }
+            if (column === 'allocationName' && !valB) {
+                valB = b.name || b.allocationId;
+            }
+            
+            // Handle null/undefined
+            if (valA == null && valB == null) return 0;
+            if (valA == null) return direction === 'asc' ? 1 : -1;
+            if (valB == null) return direction === 'asc' ? -1 : 1;
+            
+            let comparison = 0;
+            
+            if (dateColumns.includes(column)) {
+                const dateA = new Date(valA);
+                const dateB = new Date(valB);
+                comparison = dateA - dateB;
+            } else if (numericColumns.includes(column)) {
+                comparison = (parseFloat(valA) || 0) - (parseFloat(valB) || 0);
+            } else if (boolColumns.includes(column)) {
+                comparison = (valA ? 1 : 0) - (valB ? 1 : 0);
+            } else {
+                // String comparison
+                const strA = String(valA).toLowerCase();
+                const strB = String(valB).toLowerCase();
+                comparison = strA.localeCompare(strB);
+            }
+            
+            return direction === 'asc' ? comparison : -comparison;
+        });
     }
 
     async logout() {
@@ -155,22 +293,6 @@ class SettlementApp {
             this.invoices = Array.isArray(invoicesData) ? invoicesData : (invoicesData ? [invoicesData] : []);
             this.payments = Array.isArray(paymentsData) ? paymentsData : (paymentsData ? [paymentsData] : []);
             this.allocations = Array.isArray(allocationsData) ? allocationsData : (allocationsData ? [allocationsData] : []);
-
-            // Sort invoices by due date (ascending - oldest first)
-            const tSort = performance.now();
-            this.invoices.sort((a, b) => {
-                const dateA = a.dueDate ? new Date(a.dueDate) : new Date(0);
-                const dateB = b.dueDate ? new Date(b.dueDate) : new Date(0);
-                return dateA - dateB;
-            });
-
-            // Sort payments by value date (ascending - oldest first)
-            this.payments.sort((a, b) => {
-                const dateA = a.valueDate ? new Date(a.valueDate) : new Date(0);
-                const dateB = b.valueDate ? new Date(b.valueDate) : new Date(0);
-                return dateA - dateB;
-            });
-            console.log(`[timing] sort: ${(performance.now() - tSort).toFixed(0)}ms`);
 
             console.log(`Loaded: ${this.invoices.length} invoices, ${this.payments.length} payments, ${this.allocations.length} allocations`);
 
@@ -334,7 +456,11 @@ class SettlementApp {
             return;
         }
 
-        tbody.innerHTML = invoices.map(inv => {
+        // Apply sorting
+        const { column, direction } = this.sortState.invoices;
+        const sortedInvoices = this.sortData(invoices, column, direction);
+
+        tbody.innerHTML = sortedInvoices.map(inv => {
             const isSelected = this.selectedInvoice === inv.invoiceId;
             const direction = inv.isIncoming ? 'IN' : 'OUT';
             const dirClass = inv.isIncoming ? 'direction-in' : 'direction-out';
@@ -388,7 +514,11 @@ class SettlementApp {
             return;
         }
 
-        tbody.innerHTML = payments.map(pmt => {
+        // Apply sorting
+        const { column, direction } = this.sortState.payments;
+        const sortedPayments = this.sortData(payments, column, direction);
+
+        tbody.innerHTML = sortedPayments.map(pmt => {
             const isSelected = this.selectedPayment === pmt.paymentId;
             const direction = pmt.isIncoming ? 'IN' : 'OUT';
             const dirClass = pmt.isIncoming ? 'direction-in' : 'direction-out';
@@ -436,16 +566,13 @@ class SettlementApp {
         if (!Array.isArray(this.allocations)) this.allocations = [];
         
         if (this.allocations.length === 0) {
-            tbody.innerHTML = '<tr class="loading-row"><td colspan="8">No allocations</td></tr>';
+            tbody.innerHTML = '<tr class="loading-row"><td colspan="9">No allocations</td></tr>';
             return;
         }
 
-        // Sort by date descending (newest first) and show max 200
-        const sorted = [...this.allocations].sort((a, b) => {
-            const dateA = new Date(a.createdDate || a.createDate || a.entryDate || a.paymentValueDate || 0);
-            const dateB = new Date(b.createdDate || b.createDate || b.entryDate || b.paymentValueDate || 0);
-            return dateB - dateA; // Descending (newest first)
-        });
+        // Apply sorting using sortState
+        const { column, direction } = this.sortState.allocations;
+        const sorted = this.sortData(this.allocations, column, direction);
         const recent = sorted.slice(0, 200);
         
         tbody.innerHTML = recent.map(alloc => {

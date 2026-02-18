@@ -85,19 +85,19 @@
                         <thead>
                             <tr>
                                 <th class="col-check"></th>
-                                <th class="col-id">Invoice ID</th>
-                                <th class="col-ref">Reference</th>
-                                <th class="col-cpty">Counterparty</th>
-                                <th class="col-strategy">Strategy</th>
-                                <th class="col-tanker">Tanker</th>
-                                <th class="col-item">Item Type</th>
-                                <th class="col-amount">Amount</th>
-                                <th class="col-balance">Balance</th>
-                                <th class="col-curr">Curr</th>
-                                <th class="col-date">Issue Date</th>
-                                <th class="col-date">Due Date</th>
-                                <th class="col-bank">Bank</th>
-                                <th class="col-dir">Dir</th>
+                                <th class="col-id sortable" data-sort="invoiceName">Invoice ID</th>
+                                <th class="col-ref sortable" data-sort="reference">Reference</th>
+                                <th class="col-cpty sortable" data-sort="counterpartyName">Counterparty</th>
+                                <th class="col-strategy sortable" data-sort="strategyName">Strategy</th>
+                                <th class="col-tanker sortable" data-sort="tankerName">Tanker</th>
+                                <th class="col-item sortable" data-sort="itemType">Item Type</th>
+                                <th class="col-amount sortable" data-sort="amount">Amount</th>
+                                <th class="col-balance sortable" data-sort="invoiceBalance">Balance</th>
+                                <th class="col-curr sortable" data-sort="invoiceCurrency">Curr</th>
+                                <th class="col-date sortable" data-sort="issueDate">Issue Date</th>
+                                <th class="col-date sortable" data-sort="dueDate">Due Date</th>
+                                <th class="col-bank sortable" data-sort="bankName">Bank</th>
+                                <th class="col-dir sortable" data-sort="isIncoming">Dir</th>
                             </tr>
                         </thead>
                         <tbody id="invoicesBody">
@@ -126,15 +126,15 @@
                         <thead>
                             <tr>
                                 <th class="col-check"></th>
-                                <th class="col-ref">Reference</th>
-                                <th class="col-cpty">Counterparty</th>
-                                <th class="col-amount">Amount</th>
-                                <th class="col-balance">Unallocated</th>
-                                <th class="col-curr">Curr</th>
-                                <th class="col-rate">Exch Rate</th>
-                                <th class="col-date">Value Date</th>
-                                <th class="col-account">Bank Account</th>
-                                <th class="col-dir">Dir</th>
+                                <th class="col-ref sortable" data-sort="reference">Reference</th>
+                                <th class="col-cpty sortable" data-sort="counterpartyName">Counterparty</th>
+                                <th class="col-amount sortable" data-sort="amount">Amount</th>
+                                <th class="col-balance sortable" data-sort="unallocatedAmount">Unallocated</th>
+                                <th class="col-curr sortable" data-sort="currency">Curr</th>
+                                <th class="col-rate sortable" data-sort="exchangeRate">Exch Rate</th>
+                                <th class="col-date sortable" data-sort="valueDate">Value Date</th>
+                                <th class="col-account sortable" data-sort="bankAccountName">Bank Account</th>
+                                <th class="col-dir sortable" data-sort="isIncoming">Dir</th>
                             </tr>
                         </thead>
                         <tbody id="paymentsBody">
@@ -169,14 +169,14 @@
                 <table id="allocationsTable" class="data-table">
                     <thead>
                         <tr>
-                            <th>ID</th>
-                            <th>Invoice</th>
-                            <th>Payment</th>
-                            <th>Counterparty</th>
-                            <th>Amount</th>
-                            <th>Currency</th>
-                            <th>Date</th>
-                            <th>State</th>
+                            <th class="sortable" data-sort="allocationName">ID</th>
+                            <th class="sortable" data-sort="invoiceName">Invoice</th>
+                            <th class="sortable" data-sort="paymentName">Payment</th>
+                            <th class="sortable" data-sort="counterpartyName">Counterparty</th>
+                            <th class="sortable" data-sort="amount">Amount</th>
+                            <th class="sortable" data-sort="currency">Currency</th>
+                            <th class="sortable" data-sort="date">Date</th>
+                            <th class="sortable" data-sort="state">State</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
