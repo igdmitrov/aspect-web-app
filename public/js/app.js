@@ -642,8 +642,20 @@ class SettlementApp {
         document.getElementById('selectedPaymentsAmount').textContent = this.formatNumber(paymentAmount);
 
         // Enable/disable create button
-        const canCreate = invoiceCount > 0 && paymentCount > 0;
+        // Check sign consistency: negative balance invoice requires negative payment (same sign)
+        let signMismatch = false;
+        if (selectedInv && selectedPmt) {
+            const invBalance = selectedInv.invoiceBalance || 0;
+            const pmtAmount = selectedPmt.amount || 0;
+            signMismatch = (invBalance < 0) !== (pmtAmount < 0);
+        }
+        const canCreate = invoiceCount > 0 && paymentCount > 0 && !signMismatch;
         document.getElementById('createAllocationBtn').disabled = !canCreate;
+        
+        // Show warning if sign mismatch
+        if (signMismatch) {
+            this.showMessage('Sign mismatch: Invoice with negative balance requires payment with negative amount', 'error');
+        }
     }
 
     async createAllocation() {
@@ -664,6 +676,16 @@ class SettlementApp {
             
             const invoice = this.invoices.find(i => i && i.invoiceId === this.selectedInvoice);
             const payment = this.payments.find(p => p && p.paymentId === this.selectedPayment);
+            
+            // Validate sign consistency
+            const invBalance = invoice?.invoiceBalance || 0;
+            const pmtAmount = payment?.amount || 0;
+            if ((invBalance < 0) !== (pmtAmount < 0)) {
+                this.showMessage('Sign mismatch: Invoice with negative balance requires payment with negative amount', 'error');
+                btn.disabled = false;
+                btn.textContent = 'Create Allocation';
+                return;
+            }
             
             // Determine amount
             let amount = customAmount;
