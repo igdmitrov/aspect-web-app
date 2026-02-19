@@ -74,28 +74,37 @@ router.get('/invoices', async (req, res) => {
 
 // Get open/unpaid invoices only (optimized)
 // Uses getOpenInvoices webservice, falls back to filtering getInvoices
+// Supports optional ?company= query parameter for backend filtering
 router.get('/invoices/open', async (req, res) => {
+    const companyName = req.query.company || '';
+    
     try {
-        // Try optimized getOpenInvoices webservice first
+        const startTime = Date.now();
+        let data;
+        
+        // Try getOpenInvoices first
         try {
-            const startTime = Date.now();
-            const data = await callAspectWS('/getOpenInvoices', req.session.user.authHeader);
-            const elapsed = Date.now() - startTime;
-            console.log(`Loaded ${Array.isArray(data) ? data.length : 0} open invoices from getOpenInvoices in ${elapsed}ms`);
-            return res.json(data);
+            data = await callAspectWS('/getOpenInvoices', req.session.user.authHeader);
         } catch (err) {
-            // Fallback to getInvoices with client-side filter
+            // Fallback to getInvoices with balance filter
             if (err.response?.status === 404) {
                 console.log('getOpenInvoices not found, falling back to getInvoices with filter...');
-                const startTime = Date.now();
-                const data = await callAspectWS('/getInvoices', req.session.user.authHeader);
-                const elapsed = Date.now() - startTime;
-                const unpaid = data.filter(inv => Math.abs(inv.invoiceBalance) > 0.01);
-                console.log(`Filtered ${unpaid.length} open invoices from ${data.length} total in ${elapsed}ms`);
-                return res.json(unpaid);
+                data = await callAspectWS('/getInvoices', req.session.user.authHeader);
+                data = data.filter(inv => Math.abs(inv.invoiceBalance) > 0.01);
+            } else {
+                throw err;
             }
-            throw err;
         }
+        
+        // Apply company filter on backend if specified
+        if (companyName) {
+            data = data.filter(inv => inv.ourCompanyName === companyName);
+            console.log(`Filtered ${data.length} open invoices for company '${companyName}' in ${Date.now() - startTime}ms`);
+        } else {
+            console.log(`Loaded ${Array.isArray(data) ? data.length : 0} open invoices in ${Date.now() - startTime}ms`);
+        }
+        
+        return res.json(data);
     } catch (error) {
         console.error('Error fetching open invoices:', error.message);
         res.status(500).json({ error: 'Failed to fetch invoices' });
@@ -165,28 +174,37 @@ router.get('/payments', async (req, res) => {
 
 // Get open/unallocated payments (optimized)
 // Uses getOpenPayments webservice, falls back to filtering getPayments
+// Supports optional ?company= query parameter for backend filtering
 router.get('/payments/open', async (req, res) => {
+    const companyName = req.query.company || '';
+    
     try {
-        // Try optimized getOpenPayments webservice first
+        const startTime = Date.now();
+        let data;
+        
+        // Try getOpenPayments first
         try {
-            const startTime = Date.now();
-            const data = await callAspectWS('/getOpenPayments', req.session.user.authHeader);
-            const elapsed = Date.now() - startTime;
-            console.log(`Loaded ${Array.isArray(data) ? data.length : 0} open payments from getOpenPayments in ${elapsed}ms`);
-            return res.json(data);
+            data = await callAspectWS('/getOpenPayments', req.session.user.authHeader);
         } catch (err) {
-            // Fallback to getPayments with client-side filter
+            // Fallback to getPayments with unallocated filter
             if (err.response?.status === 404) {
                 console.log('getOpenPayments not found, falling back to getPayments with filter...');
-                const startTime = Date.now();
-                const data = await callAspectWS('/getPayments', req.session.user.authHeader);
-                const elapsed = Date.now() - startTime;
-                const unallocated = data.filter(pmt => Math.abs(pmt.unallocatedAmount) > 0.01);
-                console.log(`Filtered ${unallocated.length} open payments from ${data.length} total in ${elapsed}ms`);
-                return res.json(unallocated);
+                data = await callAspectWS('/getPayments', req.session.user.authHeader);
+                data = data.filter(pmt => Math.abs(pmt.unallocatedAmount) > 0.01);
+            } else {
+                throw err;
             }
-            throw err;
         }
+        
+        // Apply company filter on backend if specified
+        if (companyName) {
+            data = data.filter(pmt => pmt.companyName === companyName);
+            console.log(`Filtered ${data.length} open payments for company '${companyName}' in ${Date.now() - startTime}ms`);
+        } else {
+            console.log(`Loaded ${Array.isArray(data) ? data.length : 0} open payments in ${Date.now() - startTime}ms`);
+        }
+        
+        return res.json(data);
     } catch (error) {
         console.error('Error fetching open payments:', error.message);
         res.status(500).json({ error: 'Failed to fetch payments' });

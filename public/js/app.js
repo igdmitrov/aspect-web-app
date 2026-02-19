@@ -8,6 +8,7 @@ class SettlementApp {
         this.selectedInvoice = null;
         this.selectedPayment = null;
         this.counterparties = [];
+        this.companies = [];
         this.currencies = new Set();
         this.counterpartyChoices = null;
         this.aspectPortalUrl = '';
@@ -26,6 +27,7 @@ class SettlementApp {
     async init() {
         await this.loadConfig();
         await this.loadCurrentUser();
+        await this.loadCompanies();
         this.initChoices();
         this.bindEvents();
         await this.loadData();
@@ -95,12 +97,44 @@ class SettlementApp {
         }
     }
 
+    async loadCompanies() {
+        try {
+            const response = await fetch('/api/companies');
+            if (response.ok) {
+                const data = await response.json();
+                this.companies = Array.isArray(data) ? data : [];
+                this.populateCompanyFilter();
+            }
+        } catch (error) {
+            console.error('Error loading companies:', error);
+        }
+    }
+
+    populateCompanyFilter() {
+        const companyFilter = document.getElementById('companyFilter');
+        companyFilter.innerHTML = '<option value="">All Companies</option>';
+        
+        // Sort companies by name and populate dropdown
+        this.companies
+            .filter(c => c && c.companyName)
+            .sort((a, b) => a.companyName.localeCompare(b.companyName))
+            .forEach(company => {
+                const option = document.createElement('option');
+                option.value = company.companyName;
+                option.textContent = company.companyName;
+                companyFilter.appendChild(option);
+            });
+    }
+
     bindEvents() {
         // Logout
         document.getElementById('logoutBtn').addEventListener('click', () => this.logout());
         
         // Refresh
         document.getElementById('refreshBtn').addEventListener('click', () => this.loadData());
+        
+        // Company filter - reloads data from server
+        document.getElementById('companyFilter').addEventListener('change', () => this.loadData());
         
         // Filters
         document.getElementById('counterpartyFilter').addEventListener('change', () => this.applyFilters());
@@ -266,11 +300,15 @@ class SettlementApp {
         this.showLoading();
         const t0 = performance.now();
         
+        // Get company filter value for server-side filtering
+        const companyFilter = document.getElementById('companyFilter').value;
+        const companyParam = companyFilter ? `?company=${encodeURIComponent(companyFilter)}` : '';
+        
         try {
             const tFetch = performance.now();
             const [invoicesRes, paymentsRes, allocationsRes] = await Promise.all([
-                fetch('/api/invoices/open'),
-                fetch('/api/payments/open'),
+                fetch(`/api/invoices/open${companyParam}`),
+                fetch(`/api/payments/open${companyParam}`),
                 fetch('/api/allocations')
             ]);
             console.log(`[timing] fetch all APIs: ${(performance.now() - tFetch).toFixed(0)}ms`);
