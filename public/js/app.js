@@ -682,17 +682,25 @@ class SettlementApp {
         // Enable/disable create button
         // Check sign consistency: negative balance invoice requires negative payment (same sign)
         let signMismatch = false;
+        let companyMismatch = false;
         if (selectedInv && selectedPmt) {
             const invBalance = selectedInv.invoiceBalance || 0;
             const pmtAmount = selectedPmt.amount || 0;
             signMismatch = (invBalance < 0) !== (pmtAmount < 0);
+            
+            // Check company match: invoice's ourCompanyName must match payment's companyName
+            const invCompany = selectedInv.ourCompanyName || '';
+            const pmtCompany = selectedPmt.companyName || '';
+            companyMismatch = invCompany !== pmtCompany;
         }
-        const canCreate = invoiceCount > 0 && paymentCount > 0 && !signMismatch;
+        const canCreate = invoiceCount > 0 && paymentCount > 0 && !signMismatch && !companyMismatch;
         document.getElementById('createAllocationBtn').disabled = !canCreate;
         
-        // Show warning if sign mismatch
+        // Show warning if sign mismatch or company mismatch
         if (signMismatch) {
             this.showMessage('Sign mismatch: Invoice with negative balance requires payment with negative amount', 'error');
+        } else if (companyMismatch) {
+            this.showMessage('Company mismatch: Invoice company must match payment company for settlement', 'error');
         }
     }
 
@@ -720,6 +728,16 @@ class SettlementApp {
             const pmtAmount = payment?.amount || 0;
             if ((invBalance < 0) !== (pmtAmount < 0)) {
                 this.showMessage('Sign mismatch: Invoice with negative balance requires payment with negative amount', 'error');
+                btn.disabled = false;
+                btn.textContent = 'Create Allocation';
+                return;
+            }
+            
+            // Validate company match: invoice's ourCompanyName must match payment's companyName
+            const invCompany = invoice?.ourCompanyName || '';
+            const pmtCompany = payment?.companyName || '';
+            if (invCompany !== pmtCompany) {
+                this.showMessage('Company mismatch: Invoice company must match payment company for settlement', 'error');
                 btn.disabled = false;
                 btn.textContent = 'Create Allocation';
                 return;
