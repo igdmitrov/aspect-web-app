@@ -463,12 +463,12 @@ class SettlementApp {
             return true;
         });
 
-        // Filter payments
+        // Filter payments - always hide fully allocated (unallocated = 0)
         let filteredPayments = this.payments.filter(pmt => {
             if (!pmt) return false;
+            if (Math.abs(pmt.unallocatedAmount ?? pmt.amount ?? 0) < 0.01) return false;
             if (counterparty && pmt.counterpartyName !== counterparty) return false;
             if (currency && pmt.currency !== currency) return false;
-            if (status === 'open' && Math.abs(pmt.unallocatedAmount || pmt.amount || 0) < 0.01) return false;
             return true;
         });
 

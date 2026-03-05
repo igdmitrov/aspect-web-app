@@ -190,11 +190,13 @@ router.get('/payments/open', async (req, res) => {
             if (err.response?.status === 404) {
                 console.log('getOpenPayments not found, falling back to getPayments with filter...');
                 data = await callAspectWS('/getPayments', req.session.user.authHeader);
-                data = data.filter(pmt => Math.abs(pmt.unallocatedAmount) > 0.01);
             } else {
                 throw err;
             }
         }
+
+        // Always filter out fully allocated payments (unallocated = 0)
+        data = data.filter(pmt => Math.abs(pmt.unallocatedAmount || 0) > 0.01);
         
         // Apply company filter on backend if specified
         if (companyName) {
