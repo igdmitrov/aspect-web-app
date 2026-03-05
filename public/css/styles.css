@@ -448,6 +448,51 @@ body {
 .data-table th {
     background: var(--background);
     font-weight: 600;
+    position: relative;
+}
+
+.data-table.resizable {
+    table-layout: fixed;
+}
+
+.data-table.resizable th,
+.data-table.resizable td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.data-table th {
+    position: relative;
+}
+
+.data-table th .resize-handle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    cursor: col-resize;
+    background: transparent;
+    z-index: 11;
+}
+
+.data-table th .resize-handle:hover,
+.data-table th .resize-handle.active {
+    background: var(--primary-color);
+    opacity: 0.4;
+}
+
+.reset-col-widths {
+    font-size: 0.65rem;
+    margin-left: 6px;
+    padding: 1px 6px;
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+.reset-col-widths:hover {
+    opacity: 1;
 }
 
 .data-table th.sortable {

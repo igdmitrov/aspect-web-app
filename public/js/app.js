@@ -31,6 +31,7 @@ class SettlementApp {
         this.initChoices();
         this.bindEvents();
         await this.loadData();
+        this.initColumnResize();
     }
 
     async loadConfig() {
@@ -848,6 +849,120 @@ class SettlementApp {
         if (!this.aspectPortalUrl || !entityId) return displayText;
         const url = `${this.aspectPortalUrl}/portal/aspect?action=edit&source=aspect&aspect-action=edit&aspect-edit-id=${entityId}`;
         return `<a href="${url}" target="_blank" class="aspect-link">${displayText}</a>`;
+    }
+
+    // ── Column Resize ──────────────────────────────────────────────────
+
+    initColumnResize() {
+        ['invoicesTable', 'paymentsTable', 'allocationsTable'].forEach(tableId => {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            this.setupResizeHandles(table);
+            this.loadColumnWidths(table);
+            this.addResetButton(table);
+        });
+    }
+
+    setupResizeHandles(table) {
+        const ths = table.querySelectorAll('thead th');
+        ths.forEach(th => {
+            // Remove any existing handle
+            const old = th.querySelector('.resize-handle');
+            if (old) old.remove();
+
+            const handle = document.createElement('div');
+            handle.className = 'resize-handle';
+            th.appendChild(handle);
+
+            handle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation(); // prevent sort click
+                this.startResize(e, th, table);
+            });
+        });
+    }
+
+    startResize(e, th, table) {
+        const startX = e.pageX;
+        const startWidth = th.offsetWidth;
+
+        // Mark table as resizable (switches to table-layout: fixed)
+        if (!table.classList.contains('resizable')) {
+            // Set all columns to their current pixel widths before switching layout
+            const allThs = table.querySelectorAll('thead th');
+            allThs.forEach(h => {
+                h.style.width = h.offsetWidth + 'px';
+            });
+            table.classList.add('resizable');
+        }
+
+        const handle = th.querySelector('.resize-handle');
+        handle.classList.add('active');
+
+        const onMouseMove = (e) => {
+            const diff = e.pageX - startX;
+            const newWidth = Math.max(30, startWidth + diff);
+            th.style.width = newWidth + 'px';
+        };
+
+        const onMouseUp = () => {
+            handle.classList.remove('active');
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            this.saveColumnWidths(table);
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+    }
+
+    saveColumnWidths(table) {
+        const ths = table.querySelectorAll('thead th');
+        const widths = [];
+        ths.forEach(th => {
+            widths.push(th.style.width || '');
+        });
+        localStorage.setItem(`colWidths_${table.id}`, JSON.stringify(widths));
+    }
+
+    loadColumnWidths(table) {
+        const saved = localStorage.getItem(`colWidths_${table.id}`);
+        if (!saved) return;
+        try {
+            const widths = JSON.parse(saved);
+            const ths = table.querySelectorAll('thead th');
+            if (widths.length !== ths.length) return; // schema changed, discard
+            // Apply widths
+            const allThs = table.querySelectorAll('thead th');
+            allThs.forEach((th, i) => {
+                if (widths[i]) th.style.width = widths[i];
+            });
+            table.classList.add('resizable');
+        } catch (e) {
+            // corrupted data – ignore
+        }
+    }
+
+    addResetButton(table) {
+        const section = table.closest('.grid-section') || table.closest('.allocations-section');
+        if (!section) return;
+        const header = section.querySelector('.grid-header') || section.querySelector('.section-header');
+        if (!header) return;
+        // Avoid duplicates
+        if (header.querySelector('.reset-col-widths')) return;
+
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-secondary btn-sm reset-col-widths';
+        btn.textContent = 'Reset columns';
+        btn.title = 'Reset column widths to default';
+        btn.addEventListener('click', () => {
+            localStorage.removeItem(`colWidths_${table.id}`);
+            table.classList.remove('resizable');
+            table.querySelectorAll('thead th').forEach(th => {
+                th.style.width = '';
+            });
+        });
+        header.appendChild(btn);
     }
 }
 
